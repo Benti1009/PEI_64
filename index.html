@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Points d'eau incendie — 64</title>
+<meta name="theme-color" content="#1c1f24">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%231c1f24'/%3E%3Cpath d='M50 18c14 16 20 27 20 38a20 20 0 11-40 0c0-11 6-22 20-38z' fill='%23e0483c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14171b;
+    --panel:#1c2026;
+    --panel-2:#242830;
+    --line:#323844;
+    --text:#eef0f2;
+    --text-dim:#9aa2ad;
+    --accent:#e0483c;
+    --accent-dim:#8a2f27;
+    --public:#3f8f5f;
+    --prive:#c98a1f;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    overflow:hidden;
+  }
+  #app{
+    display:grid;
+    grid-template-columns:340px 1fr;
+    height:100%;
+  }
+  #map{ width:100%; height:100%; background:#0e1013; }
+
+  /* ---------- Sidebar ---------- */
+  #sidebar{
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    overflow:hidden;
+    z-index:1200;
+  }
+  header{
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:26px;
+    letter-spacing:0.3px;
+    margin:0 0 2px;
+    line-height:1.05;
+  }
+  header h1 span{ color:var(--accent); }
+  header p{
+    margin:0;
+    font-size:12.5px;
+    color:var(--text-dim);
+  }
+
+  .section{
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .section-label{
+    font-size:11px;
+    color:var(--text-dim);
+    margin:0 0 8px;
+    font-weight:600;
+  }
+
+  #commune-box{ position:relative; }
+  #commune-input{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:10px 34px 10px 12px;
+    border-radius:8px;
+    font-size:14px;
+    font-family:inherit;
+  }
+  #commune-input::placeholder{ color:var(--text-dim); }
+  #commune-input:focus{ outline:none; border-color:var(--accent); }
+  #commune-clear{
+    position:absolute;
+    right:6px; top:6px;
+    width:26px; height:26px;
+    background:transparent;
+    border:none;
+    color:var(--text-dim);
+    font-size:16px;
+    cursor:pointer;
+    display:none;
+    border-radius:6px;
+  }
+  #commune-clear:hover{ background:var(--line); color:var(--text); }
+  #commune-suggestions{
+    position:absolute;
+    left:0; right:0; top:calc(100% + 4px);
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    max-height:220px;
+    overflow-y:auto;
+    display:none;
+    z-index:1300;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);
+  }
+  #commune-suggestions button{
+    display:block;
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    color:var(--text);
+    padding:9px 12px;
+    font-size:13.5px;
+    font-family:inherit;
+    cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  #commune-suggestions button:last-child{ border-bottom:none; }
+  #commune-suggestions button:hover, #commune-suggestions button.active{ background:var(--line); }
+  #commune-suggestions .dep{ color:var(--text-dim); font-size:11.5px; }
+  #commune-status{ font-size:12px; color:var(--text-dim); margin-top:8px; min-height:16px; }
+
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    padding:6px 10px;
+    border-radius:20px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--text-dim);
+    font-size:12px;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  .chip.on{
+    color:var(--text);
+    border-color:var(--dot,var(--accent));
+    background:color-mix(in srgb, var(--dot,var(--accent)) 18%, var(--panel-2));
+  }
+  .chip .dot{
+    display:inline-block;
+    width:8px; height:8px;
+    border-radius:50%;
+    background:var(--dot,var(--accent));
+    margin-right:6px;
+  }
+
+  #stats{
+    padding:14px 18px;
+    margin-top:auto;
+    border-top:1px solid var(--line);
+    font-size:12px;
+    color:var(--text-dim);
+    line-height:1.6;
+  }
+  #stats b{ color:var(--text); font-weight:600; }
+
+  /* ---------- Leaflet overrides ---------- */
+  .leaflet-popup-content-wrapper{
+    background:var(--panel);
+    color:var(--text);
+    border-radius:10px;
+  }
+  .leaflet-popup-tip{ background:var(--panel); }
+  .leaflet-popup-content{ margin:12px 14px; font-family:'Inter',sans-serif; font-size:13px; min-width:200px; }
+  .popup-type{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:17px;
+    margin:0 0 6px;
+  }
+  .popup-row{ display:flex; gap:6px; margin:3px 0; color:var(--text-dim); }
+  .popup-row b{ color:var(--text); font-weight:500; }
+  .badge{
+    display:inline-block;
+    font-size:11px;
+    padding:2px 8px;
+    border-radius:20px;
+    margin-bottom:6px;
+    font-weight:600;
+  }
+  .badge.Public{ background:rgba(63,143,95,.2); color:#7bd39c; }
+  .badge.Privé{ background:rgba(201,138,31,.2); color:#e5b25a; }
+
+  .leaflet-control-layers{
+    background:var(--panel) !important;
+    color:var(--text);
+    border-radius:8px !important;
+    border:1px solid var(--line) !important;
+  }
+  .leaflet-control-layers-expanded{ padding:10px 12px !important; }
+  .leaflet-control-attribution{
+    background:rgba(20,23,27,.75) !important;
+    color:var(--text-dim) !important;
+  }
+  .leaflet-control-attribution a{ color:#c9ccd1 !important; }
+
+  .hy-icon{ border-radius:50%; border:2px solid rgba(0,0,0,.35); box-shadow:0 1px 4px rgba(0,0,0,.5); }
+  .marker-cluster-hy{ background:transparent; }
+  .marker-cluster-hy div{
+    background:var(--panel);
+    border:2px solid var(--accent);
+    color:var(--text);
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  #locate-btn{
+    position:absolute;
+    bottom:24px; right:12px;
+    z-index:1000;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text);
+    width:44px; height:44px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    box-shadow:0 2px 10px rgba(0,0,0,.4);
+  }
+  #locate-btn:hover{ border-color:var(--accent); }
+
+  #loading{
+    position:absolute; inset:0;
+    background:var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:2000; gap:12px;
+  }
+  #loading .spin{
+    width:34px; height:34px;
+    border:3px solid var(--line);
+    border-top-color:var(--accent);
+    border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  #loading p{ color:var(--text-dim); font-size:13px; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  @media (max-width: 720px){
+    #app{ grid-template-columns:1fr; grid-template-rows:auto 1fr; }
+    #sidebar{ border-right:none; border-bottom:1px solid var(--line); max-height:46vh; }
+    #stats{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <header>
+      <h1>Points d'eau <span>incendie</span></h1>
+      <p>Poteaux, bouches, réserves &amp; points d'aspiration — 64 et communes limitrophes</p>
+    </header>
+
+    <div class="section" id="commune-box">
+      <p class="section-label">Rechercher une commune</p>
+      <input id="commune-input" type="text" placeholder="Ex. Pau, Bayonne, Oloron…" autocomplete="off">
+      <button id="commune-clear" title="Effacer">✕</button>
+      <div id="commune-suggestions"></div>
+      <div id="commune-status"></div>
+    </div>
+
+    <div class="section">
+      <p class="section-label">Type de point d'eau</p>
+      <div class="chip-row" id="type-filters"></div>
+    </div>
+
+    <div class="section">
+      <p class="section-label">Statut</p>
+      <div class="chip-row" id="statut-filters"></div>
+    </div>
+
+    <div id="stats"></div>
+  </aside>
+
+  <main style="position:relative;">
+    <div id="map"></div>
+    <button id="locate-btn" title="Me localiser">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+  </main>
+</div>
+
+<div id="loading">
+  <div class="spin"></div>
+  <p id="loading-text">Chargement des points d'eau…</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script>
+(function(){
+
+  // ---------- Config ----------
+  var TYPE_COLORS = {
+    'Poteau Incendie': '#e0483c',
+    'Bouche Incendie': '#e0a23c',
+    'Réserve incendie': '#3c8ee0',
+    "Point d'aspiration": '#7c5ce0',
+    'Autre': '#8a93a1'
+  };
+  var DEFAULT_COLOR = '#8a93a1';
+  var DEPARTEMENTS = ['64','40','65','32']; // départements présents dans le jeu de données
+
+  var map = L.map('map', { zoomControl:false, preferCanvas:true }).setView([43.30,-0.60], 9);
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+
+  // ---------- Fonds de carte ----------
+  var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  });
+
+  var ignPlan = L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGN&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png', {
+    maxZoom: 19,
+    minZoom: 2,
+    attribution: 'Carte &copy; <a href="https://www.ign.fr">IGN</a> - Géoplateforme'
+  });
+
+  var ignPhoto = L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg', {
+    maxZoom: 19,
+    minZoom: 2,
+    attribution: 'Photo &copy; <a href="https://www.ign.fr">IGN</a> - Géoplateforme'
+  });
+
+  osm.addTo(map);
+  L.control.layers({
+    'OpenStreetMap': osm,
+    'IGN — Plan': ignPlan,
+    'IGN — Photo aérienne': ignPhoto
+  }, null, { position:'topright', collapsed:true }).addTo(map);
+
+  // ---------- Cluster ----------
+  var cluster = L.markerClusterGroup({
+    maxClusterRadius: 55,
+    iconCreateFunction: function(c){
+      var n = c.getChildCount();
+      var size = n < 50 ? 34 : n < 500 ? 42 : 50;
+      return L.divIcon({
+        html: '<div style="width:'+size+'px;height:'+size+'px;font-size:'+(size*0.36)+'px;">'+n+'</div>',
+        className: 'marker-cluster-hy',
+        iconSize: L.point(size, size)
+      });
+    }
+  });
+  map.addLayer(cluster);
+
+  function makeIcon(color){
+    return L.divIcon({
+      className:'hy-icon',
+      html:'',
+      iconSize:[14,14],
+      style: 'background:'+color
+    });
+  }
+  var iconCache = {};
+  function iconFor(type){
+    var color = TYPE_COLORS[type] || DEFAULT_COLOR;
+    if(!iconCache[color]){
+      iconCache[color] = L.divIcon({
+        className:'hy-icon',
+        html:'<div style="width:14px;height:14px;border-radius:50%;background:'+color+';"></div>',
+        iconSize:[14,14]
+      });
+    }
+    return iconCache[color];
+  }
+
+  // ---------- Etat / filtres ----------
+  var allFeatures = [];
+  var allMarkers = [];       // {marker, insee, type, statut}
+  var activeTypes = new Set();
+  var activeStatuts = new Set();
+  var activeInsee = null;    // code commune sélectionné (filtre) ou null = tout afficher
+
+  var loadingEl = document.getElementById('loading');
+  var loadingText = document.getElementById('loading-text');
+  var statsEl = document.getElementById('stats');
+
+  // ---------- Chargement des données ----------
+  fetch('data/hydrants.geojson')
+    .then(function(r){ return r.json(); })
+    .then(function(geojson){
+      allFeatures = geojson.features;
+      buildFilters();
+      buildMarkers();
+      applyFilters();
+      loadingEl.style.display = 'none';
+      loadCommunes();
+    })
+    .catch(function(err){
+      loadingText.textContent = "Erreur de chargement des données : " + err.message;
+    });
+
+  function buildFilters(){
+    var types = {};
+    var statuts = {};
+    allFeatures.forEach(function(f){
+      var p = f.properties;
+      types[p.type || 'Autre'] = (types[p.type || 'Autre']||0) + 1;
+      statuts[p.statut || '—'] = (statuts[p.statut || '—']||0) + 1;
+    });
+
+    var typeBox = document.getElementById('type-filters');
+    Object.keys(types).sort(function(a,b){ return types[b]-types[a]; }).forEach(function(t){
+      activeTypes.add(t);
+      var chip = document.createElement('div');
+      chip.className = 'chip on';
+      chip.style.setProperty('--dot', TYPE_COLORS[t] || DEFAULT_COLOR);
+      chip.innerHTML = '<span class="dot"></span>' + t + ' <span style="opacity:.6">(' + types[t] + ')</span>';
+      chip.addEventListener('click', function(){
+        if(activeTypes.has(t)){ activeTypes.delete(t); chip.classList.remove('on'); }
+        else { activeTypes.add(t); chip.classList.add('on'); }
+        applyFilters();
+      });
+      typeBox.appendChild(chip);
+    });
+
+    var statutBox = document.getElementById('statut-filters');
+    Object.keys(statuts).sort(function(a,b){ return statuts[b]-statuts[a]; }).forEach(function(s){
+      activeStatuts.add(s);
+      var chip = document.createElement('div');
+      chip.className = 'chip on';
+      chip.style.setProperty('--dot', s === 'Privé' ? '#c98a1f' : '#3f8f5f');
+      chip.innerHTML = '<span class="dot"></span>' + s + ' <span style="opacity:.6">(' + statuts[s] + ')</span>';
+      chip.addEventListener('click', function(){
+        if(activeStatuts.has(s)){ activeStatuts.delete(s); chip.classList.remove('on'); }
+        else { activeStatuts.add(s); chip.classList.add('on'); }
+        applyFilters();
+      });
+      statutBox.appendChild(chip);
+    });
+  }
+
+  function buildMarkers(){
+    allFeatures.forEach(function(f){
+      var p = f.properties;
+      var lon = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
+      var type = p.type || 'Autre';
+      var marker = L.marker([lat, lon], { icon: iconFor(type) });
+      marker.bindPopup(popupHtml(p));
+      allMarkers.push({ marker: marker, insee: p.insee, type: type, statut: p.statut || '—' });
+    });
+  }
+
+  function popupHtml(p){
+    var html = '<div class="badge ' + (p.statut||'') + '">' + (p.statut||'—') + '</div>';
+    html += '<p class="popup-type">' + (p.type || 'Point d\'eau') + '</p>';
+    if(p.rd) html += '<div class="popup-row"><b>' + p.rd + '</b></div>';
+    if(p.situ) html += '<div class="popup-row">' + p.situ + '</div>';
+    if(p.gest) html += '<div class="popup-row">Gestionnaire : <b>' + p.gest + '</b></div>';
+    if(p.etab) html += '<div class="popup-row">Établissement : <b>' + p.etab + '</b></div>';
+    if(p.id) html += '<div class="popup-row">Réf. : <b>' + p.id + '</b></div>';
+    if(p.maj) html += '<div class="popup-row" style="font-size:11px;opacity:.7;">MAJ ' + formatDate(p.maj) + '</div>';
+    return html;
+  }
+
+  function formatDate(s){
+    // format brut YYYYMMDDHHMMSS -> JJ/MM/AAAA
+    if(!s || s.length < 8) return s;
+    return s.slice(6,8) + '/' + s.slice(4,6) + '/' + s.slice(0,4);
+  }
+
+  function applyFilters(){
+    cluster.clearLayers();
+    var visible = [];
+    allMarkers.forEach(function(item){
+      if(!activeTypes.has(item.type)) return;
+      if(!activeStatuts.has(item.statut)) return;
+      if(activeInsee && item.insee !== activeInsee) return;
+      visible.push(item.marker);
+    });
+    cluster.addLayers(visible);
+    statsEl.innerHTML = '<b>' + visible.length.toLocaleString('fr-FR') + '</b> points affichés<br>sur <b>' + allMarkers.length.toLocaleString('fr-FR') + '</b> au total';
+  }
+
+  // ---------- Recherche commune (API Géo officielle, appelée côté client) ----------
+  var communeIndex = []; // {nom, code, dep, lat, lon}
+  var input = document.getElementById('commune-input');
+  var suggestBox = document.getElementById('commune-suggestions');
+  var clearBtn = document.getElementById('commune-clear');
+  var statusEl = document.getElementById('commune-status');
+
+  function loadCommunes(){
+    var codes = new Set(allFeatures.map(function(f){ return f.properties.insee; }));
+    var deps = new Set(Array.from(codes).map(function(c){ return c.slice(0,2); }));
+    var promises = Array.from(deps).map(function(dep){
+      return fetch('https://geo.api.gouv.fr/departements/' + dep + '/communes?fields=nom,code,centre&format=json')
+        .then(function(r){ return r.ok ? r.json() : []; })
+        .catch(function(){ return []; });
+    });
+    Promise.all(promises).then(function(results){
+      results.forEach(function(list){
+        list.forEach(function(c){
+          if(!codes.has(c.code)) return; // garder seulement les communes présentes dans le jeu de données
+          communeIndex.push({
+            nom: c.nom,
+            code: c.code,
+            dep: c.code.slice(0,2),
+            lat: c.centre ? c.centre.coordinates[1] : null,
+            lon: c.centre ? c.centre.coordinates[0] : null
+          });
+        });
+      });
+      communeIndex.sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
+      if(communeIndex.length === 0){
+        statusEl.textContent = "Recherche indisponible hors connexion.";
+      }
+    });
+  }
+
+  function normalize(s){
+    return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+
+  input.addEventListener('input', function(){
+    var q = normalize(input.value.trim());
+    clearBtn.style.display = input.value ? 'block' : 'none';
+    if(q.length < 2){ suggestBox.style.display = 'none'; return; }
+    var matches = communeIndex.filter(function(c){ return normalize(c.nom).indexOf(q) === 0; })
+      .concat(communeIndex.filter(function(c){ return normalize(c.nom).indexOf(q) > 0; }))
+      .slice(0, 8);
+    if(matches.length === 0){ suggestBox.style.display = 'none'; return; }
+    suggestBox.innerHTML = '';
+    matches.forEach(function(c){
+      var btn = document.createElement('button');
+      btn.innerHTML = c.nom + ' <span class="dep">— ' + c.code + '</span>';
+      btn.addEventListener('click', function(){ selectCommune(c); });
+      suggestBox.appendChild(btn);
+    });
+    suggestBox.style.display = 'block';
+  });
+
+  function selectCommune(c){
+    input.value = c.nom;
+    suggestBox.style.display = 'none';
+    activeInsee = c.code;
+    applyFilters();
+    if(c.lat && c.lon){ map.setView([c.lat, c.lon], 14); }
+    var count = allMarkers.filter(function(m){ return m.insee === c.code; }).length;
+    statusEl.textContent = count + ' point(s) d\'eau à ' + c.nom;
+  }
+
+  clearBtn.addEventListener('click', function(){
+    input.value = '';
+    activeInsee = null;
+    statusEl.textContent = '';
+    clearBtn.style.display = 'none';
+    suggestBox.style.display = 'none';
+    applyFilters();
+  });
+
+  document.addEventListener('click', function(e){
+    if(!document.getElementById('commune-box').contains(e.target)){
+      suggestBox.style.display = 'none';
+    }
+  });
+
+  // ---------- Géolocalisation ----------
+  document.getElementById('locate-btn').addEventListener('click', function(){
+    if(!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function(pos){
+      map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+      L.circleMarker([pos.coords.latitude, pos.coords.longitude], {
+        radius:7, color:'#3c8ee0', fillColor:'#3c8ee0', fillOpacity:0.9, weight:2
+      }).addTo(map);
+    });
+  });
+
+  // ---------- PWA : enregistrement (facultatif, pas de cache hors-ligne) ----------
+  // Pas de service worker : hors-ligne non requis pour cette version.
+
+})();
+</script>
+</body>
+</html>
