@@ -137,6 +137,57 @@
   #commune-suggestions .dep{ color:var(--text-dim); font-size:11.5px; }
   #commune-status{ font-size:12px; color:var(--text-dim); margin-top:8px; min-height:16px; }
 
+  #point-input{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:14px;
+    font-family:inherit;
+  }
+  #point-input::placeholder{ color:var(--text-dim); }
+  #point-input:focus{ outline:none; border-color:var(--accent); }
+  .point-btn-row{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .point-btn{
+    padding:7px 11px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--text);
+    font-size:12.5px;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .point-btn:hover{ border-color:var(--accent); }
+  .point-btn.on{ border-color:var(--accent); background:rgba(224,72,60,.16); }
+  .point-btn.ghost{ color:var(--text-dim); }
+  #point-result{ margin-top:10px; }
+  #point-result .pr-card{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:12.5px;
+  }
+  #point-result .pr-dist{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:22px;
+    color:var(--accent);
+    line-height:1.1;
+  }
+  #point-result .pr-sub{ color:var(--text-dim); font-size:12px; margin-top:2px; }
+  #point-result .pr-row{ margin-top:8px; color:var(--text-dim); }
+  #point-result .pr-row b{ color:var(--text); font-weight:500; }
+  #point-result .pr-error{ color:#e5807a; }
+  #point-result .pr-loading{ color:var(--text-dim); display:flex; align-items:center; gap:8px; }
+  #point-result .pr-spin{
+    width:13px; height:13px; border:2px solid var(--line); border-top-color:var(--accent);
+    border-radius:50%; animation:spin .8s linear infinite; flex:none;
+  }
+
   .chip-row{ display:flex; flex-wrap:wrap; gap:6px; }
   .chip{
     padding:6px 10px;
@@ -278,6 +329,17 @@
       <button id="commune-clear" title="Effacer">✕</button>
       <div id="commune-suggestions"></div>
       <div id="commune-status"></div>
+    </div>
+
+    <div class="section" id="point-box">
+      <p class="section-label">PEI le plus proche (par la route, voiture)</p>
+      <input id="point-input" type="text" placeholder="Coller : 43.1206, -0.2011" autocomplete="off">
+      <div class="point-btn-row">
+        <button id="point-search-btn" class="point-btn">Chercher ce point</button>
+        <button id="point-click-btn" class="point-btn">📍 Cliquer sur la carte</button>
+        <button id="point-clear-btn" class="point-btn ghost" style="display:none;">Effacer</button>
+      </div>
+      <div id="point-result"></div>
     </div>
 
     <div class="section">
@@ -575,6 +637,166 @@
       suggestBox.style.display = 'none';
     }
   });
+
+  // ---------- PEI le plus proche par la route ----------
+  var pointInput = document.getElementById('point-input');
+  var pointSearchBtn = document.getElementById('point-search-btn');
+  var pointClickBtn = document.getElementById('point-click-btn');
+  var pointClearBtn = document.getElementById('point-clear-btn');
+  var pointResult = document.getElementById('point-result');
+  var pickMode = false;
+  var searchMarker = null;
+  var bestMarkerLayer = null;
+  var routeLayer = null;
+
+  var searchIcon = L.divIcon({
+    className: '',
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:#3c8ee0;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.6);"></div>',
+    iconSize: [16,16]
+  });
+  var bestIcon = L.divIcon({
+    className: '',
+    html: '<div style="width:22px;height:22px;border-radius:50%;background:#e0483c;border:3px solid #fff;box-shadow:0 0 0 4px rgba(224,72,60,.35);"></div>',
+    iconSize: [22,22]
+  });
+
+  function haversine(lat1, lon1, lat2, lon2){
+    var R = 6371000;
+    var dLat = (lat2-lat1) * Math.PI/180;
+    var dLon = (lon2-lon1) * Math.PI/180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
+            Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function parsePoint(text){
+    var m = text.trim().match(/^(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)$/);
+    if(!m) return null;
+    var lat = parseFloat(m[1].replace(',', '.'));
+    var lon = parseFloat(m[2].replace(',', '.'));
+    if(isNaN(lat) || isNaN(lon)) return null;
+    if(lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat: lat, lon: lon };
+  }
+
+  pointSearchBtn.addEventListener('click', function(){
+    var p = parsePoint(pointInput.value);
+    if(!p){
+      pointResult.innerHTML = '<div class="pr-card pr-error">Format non reconnu. Utilise "latitude, longitude", ex. 43.1206, -0.2011</div>';
+      return;
+    }
+    setSearchPoint(L.latLng(p.lat, p.lon));
+  });
+
+  pointInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter') pointSearchBtn.click();
+  });
+
+  pointClickBtn.addEventListener('click', function(){
+    pickMode = !pickMode;
+    pointClickBtn.classList.toggle('on', pickMode);
+    map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
+  });
+
+  map.on('click', function(e){
+    if(!pickMode) return;
+    pickMode = false;
+    pointClickBtn.classList.remove('on');
+    map.getContainer().style.cursor = '';
+    pointInput.value = e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
+    setSearchPoint(e.latlng);
+  });
+
+  pointClearBtn.addEventListener('click', function(){
+    pointInput.value = '';
+    pointResult.innerHTML = '';
+    pointClearBtn.style.display = 'none';
+    if(searchMarker){ map.removeLayer(searchMarker); searchMarker = null; }
+    if(bestMarkerLayer){ map.removeLayer(bestMarkerLayer); bestMarkerLayer = null; }
+    if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
+  });
+
+  function setSearchPoint(latlng){
+    if(searchMarker){ map.removeLayer(searchMarker); }
+    if(bestMarkerLayer){ map.removeLayer(bestMarkerLayer); bestMarkerLayer = null; }
+    if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
+    searchMarker = L.marker(latlng, { icon: searchIcon }).addTo(map);
+    pointClearBtn.style.display = 'inline-block';
+    pointResult.innerHTML = '<div class="pr-card pr-loading"><span class="pr-spin"></span> Recherche du PEI le plus proche…</div>';
+    findNearestByRoad(latlng);
+  }
+
+  function findNearestByRoad(latlng){
+    // 1. présélection à vol d'oiseau parmi les PEI actuellement filtrés (type/statut)
+    var candidates = allMarkers.filter(function(item){
+      return activeTypes.has(item.type) && activeStatuts.has(item.statut);
+    }).map(function(item){
+      var ll = item.marker.getLatLng();
+      return { item: item, lat: ll.lat, lon: ll.lng, straight: haversine(latlng.lat, latlng.lng, ll.lat, ll.lng) };
+    }).sort(function(a,b){ return a.straight - b.straight; }).slice(0, 25);
+
+    if(candidates.length === 0){
+      pointResult.innerHTML = '<div class="pr-card pr-error">Aucun PEI ne correspond aux filtres actifs.</div>';
+      return;
+    }
+
+    // 2. matrice de distances routières réelles via OSRM (un seul appel, voiture)
+    var coords = latlng.lng + ',' + latlng.lat + ';' + candidates.map(function(c){ return c.lon + ',' + c.lat; }).join(';');
+    var destinations = candidates.map(function(_, i){ return i + 1; }).join(';');
+    var tableUrl = 'https://router.project-osrm.org/table/v1/driving/' + coords +
+      '?sources=0&destinations=' + destinations + '&annotations=distance,duration';
+
+    fetch(tableUrl).then(function(r){ return r.json(); }).then(function(data){
+      if(data.code !== 'Ok') throw new Error(data.message || data.code);
+      var distances = data.distances[0];
+      var durations = data.durations[0];
+      var bestIdx = -1, bestDist = Infinity;
+      for(var i=0;i<distances.length;i++){
+        if(distances[i] !== null && distances[i] < bestDist){ bestDist = distances[i]; bestIdx = i; }
+      }
+      if(bestIdx === -1) throw new Error('Aucun itinéraire routier trouvé parmi les points les plus proches.');
+
+      var best = candidates[bestIdx];
+      var bestDuration = durations[bestIdx];
+
+      // 3. tracé de l'itinéraire pour affichage
+      var routeUrl = 'https://router.project-osrm.org/route/v1/driving/' +
+        latlng.lng + ',' + latlng.lat + ';' + best.lon + ',' + best.lat +
+        '?overview=full&geometries=geojson';
+
+      return fetch(routeUrl).then(function(r){ return r.json(); }).then(function(routeData){
+        if(routeData.code === 'Ok' && routeData.routes && routeData.routes[0]){
+          var line = routeData.routes[0].geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
+          routeLayer = L.polyline(line, { color:'#3c8ee0', weight:4, opacity:.85 }).addTo(map);
+        }
+        showBestResult(best, bestDist, bestDuration, latlng);
+      });
+    }).catch(function(err){
+      pointResult.innerHTML = '<div class="pr-card pr-error">Recherche impossible : ' + err.message + '<br><span style="opacity:.7;">(le service de routage public peut être temporairement indisponible)</span></div>';
+    });
+  }
+
+  function showBestResult(best, distMeters, durSeconds, latlng){
+    var p = best.item.marker.getPopup().getContent();
+    bestMarkerLayer = L.marker([best.lat, best.lon], { icon: bestIcon }).addTo(map);
+    bestMarkerLayer.bindPopup(p);
+
+    var distKm = (distMeters/1000).toFixed(distMeters < 10000 ? 2 : 1);
+    var durMin = Math.round(durSeconds/60);
+
+    pointResult.innerHTML =
+      '<div class="pr-card">' +
+        '<div class="pr-dist">' + distKm + ' km <span style="font-size:13px;color:var(--text-dim);font-weight:400;">— ' + durMin + ' min en voiture</span></div>' +
+        '<div class="pr-sub">Distance par la route jusqu\'au PEI le plus proche</div>' +
+        '<div class="pr-row">Type : <b>' + best.item.type + '</b></div>' +
+        '<div class="pr-row">Statut : <b>' + best.item.statut + '</b></div>' +
+      '</div>';
+
+    var group = L.featureGroup([searchMarker, bestMarkerLayer, routeLayer].filter(Boolean));
+    map.fitBounds(group.getBounds().pad(0.25));
+    bestMarkerLayer.openPopup();
+  }
 
   // ---------- Géolocalisation ----------
   document.getElementById('locate-btn').addEventListener('click', function(){

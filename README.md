@@ -20,6 +20,18 @@
 4. L'app sera accessible à l'URL fournie par GitHub Pages (ex. `https://tonpseudo.github.io/nom-du-repo/`).
 5. Sur mobile (Chrome/Safari), ouvrir l'URL puis "Ajouter à l'écran d'accueil" installera la PWA.
 
+## Nouvelle fonctionnalité : PEI le plus proche par la route
+Dans la barre latérale, le bloc "PEI le plus proche" permet :
+- de **coller des coordonnées** au format `latitude, longitude` (ex. `43.1206, -0.2011`) puis cliquer "Chercher ce point" ;
+- ou de cliquer sur **"📍 Cliquer sur la carte"** puis de cliquer directement sur la carte pour choisir le point.
+
+L'app calcule alors le PEI le plus proche **par la route (mode voiture)**, pas à vol d'oiseau :
+1. présélection des ~25 PEI les plus proches à vol d'oiseau (calcul local, instantané) ;
+2. appel à l'API publique **OSRM** (`router.project-osrm.org`, gratuite, sans clé) pour obtenir la distance et le temps de trajet réels par la route jusqu'à chacun de ces candidats ;
+3. le plus proche par la route est mis en évidence sur la carte, avec l'itinéraire tracé et la distance/durée affichées.
+
+⚠️ Cette fonctionnalité nécessite une connexion internet (comme la recherche de commune) et dépend du serveur de démonstration public d'OSRM, qui n'offre pas de garantie de disponibilité en production. Si tu veux fiabiliser ça plus tard, il est possible d'héberger sa propre instance OSRM ou de passer par un service payant (ex. OpenRouteService, Mapbox).
+
 ## Notes techniques
 - Le fond **IGN** utilise les flux Géoplateforme (`data.geopf.fr`), publics et sans clé API.
 - La recherche par commune interroge l'**API Géo officielle** (`geo.api.gouv.fr`) au chargement de la page pour récupérer les noms de communes à partir des codes INSEE présents dans le fichier — nécessite donc une connexion internet pour cette fonctionnalité (la carte et les points restent, eux, disponibles dès que le fichier GeoJSON est chargé).
