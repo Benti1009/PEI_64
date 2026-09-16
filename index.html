@@ -292,6 +292,39 @@
   }
   #locate-btn:hover{ border-color:var(--accent); }
 
+  .fab-mobile{
+    display:none;
+    position:absolute;
+    z-index:1000;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text);
+    width:44px; height:44px;
+    border-radius:50%;
+    align-items:center; justify-content:center;
+    cursor:pointer;
+    font-size:18px;
+    box-shadow:0 2px 10px rgba(0,0,0,.4);
+  }
+  .fab-mobile:hover{ border-color:var(--accent); }
+  .fab-mobile.on{ border-color:var(--accent); background:rgba(224,72,60,.18); }
+  #point-toggle-btn{ bottom:24px; right:64px; }
+  #filters-toggle-btn{ bottom:80px; right:12px; }
+
+  .panel-close{
+    display:none;
+    position:absolute; top:10px; right:10px;
+    width:26px; height:26px;
+    align-items:center; justify-content:center;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:50%;
+    color:var(--text-dim);
+    cursor:pointer;
+    font-size:13px;
+    line-height:1;
+  }
+
   #loading{
     position:absolute; inset:0;
     background:var(--bg);
@@ -309,9 +342,47 @@
   @keyframes spin{ to{ transform:rotate(360deg); } }
 
   @media (max-width: 720px){
-    #app{ grid-template-columns:1fr; grid-template-rows:auto 1fr; }
-    #sidebar{ border-right:none; border-bottom:1px solid var(--line); max-height:46vh; }
-    #stats{ display:none; }
+    #app{ grid-template-columns:1fr; grid-template-rows:1fr; }
+
+    #sidebar{
+      position:absolute;
+      top:0; left:0; right:0; bottom:auto;
+      height:auto;
+      max-height:calc(100% - 24px);
+      overflow-y:auto;
+      background:transparent;
+      border:none;
+      display:block;
+      pointer-events:none;
+      padding:12px;
+      z-index:1200;
+    }
+    #sidebar > header{ display:none; }
+    #sidebar > .section{
+      pointer-events:auto;
+      border:1px solid var(--line);
+      border-radius:12px;
+      margin-bottom:10px;
+      box-shadow:0 8px 24px rgba(0,0,0,.45);
+      position:relative;
+    }
+    #sidebar > #stats{ display:none; }
+
+    /* Point de recherche : masqué par défaut, ouvert via le FAB 📍 ;
+       le résultat reste visible même quand les contrôles se referment. */
+    #point-box{ display:none; }
+    #sidebar.show-point #point-box,
+    #point-box.has-result{ display:block; }
+    #point-controls{ display:none; }
+    #sidebar.show-point #point-controls{ display:block; }
+    #point-result:empty{ display:none; }
+
+    /* Filtres : masqués par défaut, ouverts via le FAB entonnoir */
+    #filters-panel{ display:none; }
+    #sidebar.show-filters #filters-panel{ display:block; }
+
+    .panel-close{ display:flex; }
+    .fab-mobile{ display:flex; }
   }
 </style>
 </head>
@@ -332,23 +403,24 @@
     </div>
 
     <div class="section" id="point-box">
-      <p class="section-label">PEI le plus proche (par la route, voiture)</p>
-      <input id="point-input" type="text" placeholder="Coller : 43.1206, -0.2011" autocomplete="off">
-      <div class="point-btn-row">
-        <button id="point-search-btn" class="point-btn">Chercher ce point</button>
-        <button id="point-click-btn" class="point-btn">📍 Cliquer sur la carte</button>
-        <button id="point-clear-btn" class="point-btn ghost" style="display:none;">Effacer</button>
+      <button id="point-box-close" class="panel-close" title="Fermer">✕</button>
+      <div id="point-controls">
+        <p class="section-label">PEI le plus proche (par la route, voiture)</p>
+        <input id="point-input" type="text" placeholder="Coller : 43.1206, -0.2011" autocomplete="off">
+        <div class="point-btn-row">
+          <button id="point-search-btn" class="point-btn">Chercher ce point</button>
+          <button id="point-click-btn" class="point-btn">📍 Cliquer sur la carte</button>
+          <button id="point-clear-btn" class="point-btn ghost" style="display:none;">Effacer</button>
+        </div>
       </div>
       <div id="point-result"></div>
     </div>
 
-    <div class="section">
+    <div class="section" id="filters-panel">
+      <button id="filters-panel-close" class="panel-close" title="Fermer">✕</button>
       <p class="section-label">Type de point d'eau</p>
       <div class="chip-row" id="type-filters"></div>
-    </div>
-
-    <div class="section">
-      <p class="section-label">Statut</p>
+      <p class="section-label" style="margin-top:14px;">Statut</p>
       <div class="chip-row" id="statut-filters"></div>
     </div>
 
@@ -359,6 +431,10 @@
     <div id="map"></div>
     <button id="locate-btn" title="Me localiser">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+    <button id="point-toggle-btn" class="fab-mobile" title="PEI le plus proche">📍</button>
+    <button id="filters-toggle-btn" class="fab-mobile" title="Filtres">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M8 12h8M11 18h2"/></svg>
     </button>
   </main>
 </div>
@@ -638,6 +714,39 @@
     }
   });
 
+  // ---------- Boutons flottants mobile (panneaux "PEI proche" et "Filtres") ----------
+  var sidebarEl = document.getElementById('sidebar');
+  var pointBoxEl = document.getElementById('point-box');
+  var pointToggleBtn = document.getElementById('point-toggle-btn');
+  var filtersToggleBtn = document.getElementById('filters-toggle-btn');
+  var pointBoxCloseBtn = document.getElementById('point-box-close');
+  var filtersPanelCloseBtn = document.getElementById('filters-panel-close');
+
+  pointToggleBtn.addEventListener('click', function(){
+    var open = sidebarEl.classList.toggle('show-point');
+    pointToggleBtn.classList.toggle('on', open);
+    sidebarEl.classList.remove('show-filters');
+    filtersToggleBtn.classList.remove('on');
+  });
+
+  filtersToggleBtn.addEventListener('click', function(){
+    var open = sidebarEl.classList.toggle('show-filters');
+    filtersToggleBtn.classList.toggle('on', open);
+    sidebarEl.classList.remove('show-point');
+    pointToggleBtn.classList.remove('on');
+  });
+
+  pointBoxCloseBtn.addEventListener('click', function(){
+    sidebarEl.classList.remove('show-point');
+    pointToggleBtn.classList.remove('on');
+    pointBoxEl.classList.remove('has-result'); // masque tout le panneau (mobile) ; les repères restent sur la carte
+  });
+
+  filtersPanelCloseBtn.addEventListener('click', function(){
+    sidebarEl.classList.remove('show-filters');
+    filtersToggleBtn.classList.remove('on');
+  });
+
   // ---------- PEI le plus proche par la route ----------
   var pointInput = document.getElementById('point-input');
   var pointSearchBtn = document.getElementById('point-search-btn');
@@ -712,6 +821,7 @@
     pointInput.value = '';
     pointResult.innerHTML = '';
     pointClearBtn.style.display = 'none';
+    pointBoxEl.classList.remove('has-result');
     if(searchMarker){ map.removeLayer(searchMarker); searchMarker = null; }
     if(bestMarkerLayer){ map.removeLayer(bestMarkerLayer); bestMarkerLayer = null; }
     if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
@@ -724,6 +834,9 @@
     searchMarker = L.marker(latlng, { icon: searchIcon }).addTo(map);
     pointClearBtn.style.display = 'inline-block';
     pointResult.innerHTML = '<div class="pr-card pr-loading"><span class="pr-spin"></span> Recherche du PEI le plus proche…</div>';
+    pointBoxEl.classList.add('has-result');
+    sidebarEl.classList.remove('show-point'); // sur mobile : referme les contrôles, ne garde que le résultat
+    pointToggleBtn.classList.remove('on');
     findNearestByRoad(latlng);
   }
 
