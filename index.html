@@ -435,6 +435,7 @@
 
     <div class="section" id="filters-panel">
       <button id="filters-panel-close" class="panel-close" title="Fermer">✕</button>
+      <button id="filters-toggle-all-btn" class="point-btn" style="width:100%;margin-bottom:10px;">Tout cocher / tout décocher</button>
       <p class="section-label">Type de point d'eau</p>
       <div class="chip-row" id="type-filters"></div>
       <p class="section-label" style="margin-top:14px;">Statut</p>
@@ -481,7 +482,6 @@
   var DEPARTEMENTS = ['64','40','65','32']; // départements présents dans le jeu de données
 
   var map = L.map('map', { zoomControl:false, preferCanvas:true }).setView([43.30,-0.60], 9);
-  L.control.zoom({ position:'bottomright' }).addTo(map);
 
   // ---------- Fonds de carte ----------
   var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -608,6 +608,28 @@
       });
       statutBox.appendChild(chip);
     });
+  }
+
+  function toggleAllFilters(){
+    var typeChips = document.getElementById('type-filters').children;
+    var statutChips = document.getElementById('statut-filters').children;
+    var turnOn = !(activeTypes.size === typeChips.length && activeStatuts.size === statutChips.length);
+
+    activeTypes.clear();
+    activeStatuts.clear();
+
+    Array.prototype.forEach.call(typeChips, function(chip){
+      var label = chip.textContent.replace(/\s*\(\d+\)\s*$/, '').trim();
+      if(turnOn){ activeTypes.add(label); chip.classList.add('on'); }
+      else { chip.classList.remove('on'); }
+    });
+    Array.prototype.forEach.call(statutChips, function(chip){
+      var label = chip.textContent.replace(/\s*\(\d+\)\s*$/, '').trim();
+      if(turnOn){ activeStatuts.add(label); chip.classList.add('on'); }
+      else { chip.classList.remove('on'); }
+    });
+
+    applyFilters();
   }
 
   function buildMarkers(){
@@ -752,6 +774,7 @@
   var communeToggleBtn = document.getElementById('commune-toggle-btn');
   var pointBoxCloseBtn = document.getElementById('point-box-close');
   var filtersPanelCloseBtn = document.getElementById('filters-panel-close');
+  document.getElementById('filters-toggle-all-btn').addEventListener('click', toggleAllFilters);
 
   function closeAllMobilePanels(){
     sidebarEl.classList.remove('show-point', 'show-filters', 'show-commune');
@@ -960,11 +983,13 @@
   }
 
   // ---------- Géolocalisation ----------
+  var myLocationMarker = null;
   document.getElementById('locate-btn').addEventListener('click', function(){
     if(!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(function(pos){
       map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-      L.circleMarker([pos.coords.latitude, pos.coords.longitude], {
+      if(myLocationMarker){ map.removeLayer(myLocationMarker); }
+      myLocationMarker = L.circleMarker([pos.coords.latitude, pos.coords.longitude], {
         radius:7, color:'#3c8ee0', fillColor:'#3c8ee0', fillOpacity:0.9, weight:2
       }).addTo(map);
     });
