@@ -247,8 +247,7 @@
     margin-bottom:6px;
     font-weight:600;
   }
-  .badge.Public{ background:rgba(63,143,95,.2); color:#7bd39c; }
-  .badge.Privé{ background:rgba(201,138,31,.2); color:#e5b25a; }
+  .badge{ background:rgba(224,72,60,.18); color:#f0938b; }
 
   .leaflet-control-layers{
     background:var(--panel) !important;
@@ -403,7 +402,7 @@
   <aside id="sidebar">
     <header>
       <h1>Points d'eau <span>incendie</span></h1>
-      <p>Poteaux, bouches, réserves &amp; points d'aspiration — 64 et communes limitrophes</p>
+      <p>Poteaux, bouches &amp; réserves — secteur Soumoulou / Pontacq</p>
     </header>
 
     <div class="section" id="commune-box">
@@ -411,7 +410,7 @@
       <div id="commune-controls">
         <p class="section-label">Rechercher une commune</p>
         <div id="commune-input-wrap">
-          <input id="commune-input" type="text" placeholder="Ex. Pau, Bayonne, Oloron…" autocomplete="off">
+          <input id="commune-input" type="text" placeholder="Ex. Soumoulou, Nousty, Espoey…" autocomplete="off">
           <button id="commune-clear" title="Effacer">✕</button>
           <div id="commune-suggestions"></div>
         </div>
@@ -438,8 +437,6 @@
       <button id="filters-toggle-all-btn" class="point-btn" style="width:100%;margin-bottom:10px;">Tout cocher / tout décocher</button>
       <p class="section-label">Type de point d'eau</p>
       <div class="chip-row" id="type-filters"></div>
-      <p class="section-label" style="margin-top:14px;">Statut</p>
-      <div class="chip-row" id="statut-filters"></div>
     </div>
 
     <div id="stats"></div>
@@ -472,16 +469,16 @@
 
   // ---------- Config ----------
   var TYPE_COLORS = {
-    'Poteau Incendie': '#e0483c',
-    'Bouche Incendie': '#e0a23c',
-    'Réserve incendie': '#3c8ee0',
-    "Point d'aspiration": '#7c5ce0',
+    'Poteau incendie 60 m³/h': '#e0483c',
+    'Poteau incendie 30 m³/h': '#e07a3c',
+    'Bouche incendie': '#e0a23c',
+    'Réserve artificielle': '#3c8ee0',
+    'Réserve naturelle': '#3fa87a',
     'Autre': '#8a93a1'
   };
   var DEFAULT_COLOR = '#8a93a1';
-  var DEPARTEMENTS = ['64','40','65','32']; // départements présents dans le jeu de données
 
-  var map = L.map('map', { zoomControl:false, preferCanvas:true }).setView([43.30,-0.60], 9);
+  var map = L.map('map', { zoomControl:false, preferCanvas:true }).setView([43.30,-0.20], 11);
 
   // ---------- Fonds de carte ----------
   var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -546,10 +543,9 @@
 
   // ---------- Etat / filtres ----------
   var allFeatures = [];
-  var allMarkers = [];       // {marker, insee, type, statut}
+  var allMarkers = [];       // {marker, commune, type}
   var activeTypes = new Set();
-  var activeStatuts = new Set();
-  var activeInsee = null;    // code commune sélectionné (filtre) ou null = tout afficher
+  var activeCommune = null;  // nom de commune sélectionné (filtre) ou null = tout afficher
 
   var loadingEl = document.getElementById('loading');
   var loadingText = document.getElementById('loading-text');
@@ -563,8 +559,9 @@
       buildFilters();
       buildMarkers();
       applyFilters();
+      buildCommuneIndex();
+      fitToData();
       loadingEl.style.display = 'none';
-      loadCommunes();
     })
     .catch(function(err){
       loadingText.textContent = "Erreur de chargement des données : " + err.message;
@@ -572,11 +569,9 @@
 
   function buildFilters(){
     var types = {};
-    var statuts = {};
     allFeatures.forEach(function(f){
       var p = f.properties;
       types[p.type || 'Autre'] = (types[p.type || 'Autre']||0) + 1;
-      statuts[p.statut || '—'] = (statuts[p.statut || '—']||0) + 1;
     });
 
     var typeBox = document.getElementById('type-filters');
@@ -593,39 +588,22 @@
       });
       typeBox.appendChild(chip);
     });
+  }
 
-    var statutBox = document.getElementById('statut-filters');
-    Object.keys(statuts).sort(function(a,b){ return statuts[b]-statuts[a]; }).forEach(function(s){
-      activeStatuts.add(s);
-      var chip = document.createElement('div');
-      chip.className = 'chip on';
-      chip.style.setProperty('--dot', s === 'Privé' ? '#c98a1f' : '#3f8f5f');
-      chip.innerHTML = '<span class="dot"></span>' + s + ' <span style="opacity:.6">(' + statuts[s] + ')</span>';
-      chip.addEventListener('click', function(){
-        if(activeStatuts.has(s)){ activeStatuts.delete(s); chip.classList.remove('on'); }
-        else { activeStatuts.add(s); chip.classList.add('on'); }
-        applyFilters();
-      });
-      statutBox.appendChild(chip);
-    });
+  function fitToData(){
+    if(!allMarkers.length) return;
+    var group = L.featureGroup(allMarkers.map(function(m){ return m.marker; }));
+    map.fitBounds(group.getBounds().pad(0.08));
   }
 
   function toggleAllFilters(){
     var typeChips = document.getElementById('type-filters').children;
-    var statutChips = document.getElementById('statut-filters').children;
-    var turnOn = !(activeTypes.size === typeChips.length && activeStatuts.size === statutChips.length);
+    var turnOn = activeTypes.size !== typeChips.length;
 
     activeTypes.clear();
-    activeStatuts.clear();
-
     Array.prototype.forEach.call(typeChips, function(chip){
       var label = chip.textContent.replace(/\s*\(\d+\)\s*$/, '').trim();
       if(turnOn){ activeTypes.add(label); chip.classList.add('on'); }
-      else { chip.classList.remove('on'); }
-    });
-    Array.prototype.forEach.call(statutChips, function(chip){
-      var label = chip.textContent.replace(/\s*\(\d+\)\s*$/, '').trim();
-      if(turnOn){ activeStatuts.add(label); chip.classList.add('on'); }
       else { chip.classList.remove('on'); }
     });
 
@@ -639,26 +617,15 @@
       var type = p.type || 'Autre';
       var marker = L.marker([lat, lon], { icon: iconFor(type) });
       marker.bindPopup(popupHtml(p));
-      allMarkers.push({ marker: marker, insee: p.insee, type: type, statut: p.statut || '—' });
+      allMarkers.push({ marker: marker, commune: p.commune || '—', type: type });
     });
   }
 
   function popupHtml(p){
-    var html = '<div class="badge ' + (p.statut||'') + '">' + (p.statut||'—') + '</div>';
+    var html = '<div class="badge">' + (p.commune || '—') + '</div>';
     html += '<p class="popup-type">' + (p.type || 'Point d\'eau') + '</p>';
-    if(p.rd) html += '<div class="popup-row"><b>' + p.rd + '</b></div>';
-    if(p.situ) html += '<div class="popup-row">' + p.situ + '</div>';
-    if(p.gest) html += '<div class="popup-row">Gestionnaire : <b>' + p.gest + '</b></div>';
-    if(p.etab) html += '<div class="popup-row">Établissement : <b>' + p.etab + '</b></div>';
-    if(p.id) html += '<div class="popup-row">Réf. : <b>' + p.id + '</b></div>';
-    if(p.maj) html += '<div class="popup-row" style="font-size:11px;opacity:.7;">MAJ ' + formatDate(p.maj) + '</div>';
+    if(p.x && p.y) html += '<div class="popup-row" style="font-size:11px;opacity:.7;">Lambert 93 : ' + p.x + ' ; ' + p.y + '</div>';
     return html;
-  }
-
-  function formatDate(s){
-    // format brut YYYYMMDDHHMMSS -> JJ/MM/AAAA
-    if(!s || s.length < 8) return s;
-    return s.slice(6,8) + '/' + s.slice(4,6) + '/' + s.slice(0,4);
   }
 
   function applyFilters(){
@@ -666,8 +633,7 @@
     var visible = [];
     allMarkers.forEach(function(item){
       if(!activeTypes.has(item.type)) return;
-      if(!activeStatuts.has(item.statut)) return;
-      if(activeInsee && item.insee !== activeInsee) return;
+      if(activeCommune && item.commune !== activeCommune) return;
       visible.push(item.marker);
     });
     cluster.addLayers(visible);
@@ -675,7 +641,7 @@
   }
 
   // ---------- Recherche commune (API Géo officielle, appelée côté client) ----------
-  var communeIndex = []; // {nom, code, dep, lat, lon}
+  var communeIndex = []; // {nom, n, lat, lon}
   var communeBoxEl = document.getElementById('commune-box');
   var communeBoxCloseBtn = document.getElementById('commune-box-close');
   var input = document.getElementById('commune-input');
@@ -683,32 +649,20 @@
   var clearBtn = document.getElementById('commune-clear');
   var statusEl = document.getElementById('commune-status');
 
-  function loadCommunes(){
-    var codes = new Set(allFeatures.map(function(f){ return f.properties.insee; }));
-    var deps = new Set(Array.from(codes).map(function(c){ return c.slice(0,2); }));
-    var promises = Array.from(deps).map(function(dep){
-      return fetch('https://geo.api.gouv.fr/departements/' + dep + '/communes?fields=nom,code,centre&format=json')
-        .then(function(r){ return r.ok ? r.json() : []; })
-        .catch(function(){ return []; });
+  function buildCommuneIndex(){
+    var byName = {};
+    allFeatures.forEach(function(f){
+      var nom = f.properties.commune || '—';
+      var c = f.geometry.coordinates;
+      if(!byName[nom]) byName[nom] = { nom:nom, n:0, sumLat:0, sumLon:0 };
+      byName[nom].n++;
+      byName[nom].sumLon += c[0];
+      byName[nom].sumLat += c[1];
     });
-    Promise.all(promises).then(function(results){
-      results.forEach(function(list){
-        list.forEach(function(c){
-          if(!codes.has(c.code)) return; // garder seulement les communes présentes dans le jeu de données
-          communeIndex.push({
-            nom: c.nom,
-            code: c.code,
-            dep: c.code.slice(0,2),
-            lat: c.centre ? c.centre.coordinates[1] : null,
-            lon: c.centre ? c.centre.coordinates[0] : null
-          });
-        });
-      });
-      communeIndex.sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
-      if(communeIndex.length === 0){
-        statusEl.textContent = "Recherche indisponible hors connexion.";
-      }
-    });
+    communeIndex = Object.keys(byName).map(function(nom){
+      var o = byName[nom];
+      return { nom:nom, n:o.n, lat:o.sumLat/o.n, lon:o.sumLon/o.n };
+    }).sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
   }
 
   function normalize(s){
@@ -726,7 +680,7 @@
     suggestBox.innerHTML = '';
     matches.forEach(function(c){
       var btn = document.createElement('button');
-      btn.innerHTML = c.nom + ' <span class="dep">— ' + c.code + '</span>';
+      btn.innerHTML = c.nom + ' <span class="dep">— ' + c.n + ' PEI</span>';
       btn.addEventListener('click', function(){ selectCommune(c); });
       suggestBox.appendChild(btn);
     });
@@ -740,11 +694,13 @@
   function selectCommune(c){
     input.value = c.nom;
     suggestBox.style.display = 'none';
-    activeInsee = c.code;
+    activeCommune = c.nom;
     applyFilters();
-    if(c.lat && c.lon){ map.setView([c.lat, c.lon], 14); }
-    var count = allMarkers.filter(function(m){ return m.insee === c.code; }).length;
-    statusEl.textContent = count + ' point(s) d\'eau à ' + c.nom;
+    var pts = allMarkers.filter(function(m){ return m.commune === c.nom; });
+    if(pts.length){
+      map.fitBounds(L.featureGroup(pts.map(function(m){ return m.marker; })).getBounds().pad(0.3));
+    }
+    statusEl.textContent = pts.length + ' point(s) d\'eau à ' + c.nom;
     communeBoxEl.classList.add('has-result');
     sidebarEl.classList.remove('show-commune'); // sur mobile : referme les contrôles, garde le résultat
     communeToggleBtn.classList.remove('on');
@@ -752,7 +708,7 @@
 
   clearBtn.addEventListener('click', function(){
     input.value = '';
-    activeInsee = null;
+    activeCommune = null;
     statusEl.textContent = '';
     clearBtn.style.display = 'none';
     suggestBox.style.display = 'none';
@@ -912,9 +868,9 @@
   }
 
   function findNearestByRoad(latlng){
-    // 1. présélection à vol d'oiseau parmi les PEI actuellement filtrés (type/statut)
+    // 1. présélection à vol d'oiseau parmi les PEI actuellement filtrés (type)
     var candidates = allMarkers.filter(function(item){
-      return activeTypes.has(item.type) && activeStatuts.has(item.statut);
+      return activeTypes.has(item.type);
     }).map(function(item){
       var ll = item.marker.getLatLng();
       return { item: item, lat: ll.lat, lon: ll.lng, straight: haversine(latlng.lat, latlng.lng, ll.lat, ll.lng) };
@@ -974,7 +930,7 @@
         '<div class="pr-dist">' + distKm + ' km <span style="font-size:13px;color:var(--text-dim);font-weight:400;">— ' + durMin + ' min en voiture</span></div>' +
         '<div class="pr-sub">Distance par la route jusqu\'au PEI le plus proche</div>' +
         '<div class="pr-row">Type : <b>' + best.item.type + '</b></div>' +
-        '<div class="pr-row">Statut : <b>' + best.item.statut + '</b></div>' +
+        '<div class="pr-row">Commune : <b>' + best.item.commune + '</b></div>' +
       '</div>';
 
     var group = L.featureGroup([searchMarker, bestMarkerLayer, routeLayer].filter(Boolean));
