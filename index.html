@@ -82,6 +82,7 @@
   }
 
   #commune-box{ position:relative; }
+  #commune-input-wrap{ position:relative; }
   #commune-input{
     width:100%;
     background:var(--panel-2);
@@ -410,9 +411,11 @@
       <button id="commune-box-close" class="panel-close" title="Fermer">✕</button>
       <div id="commune-controls">
         <p class="section-label">Rechercher une commune</p>
-        <input id="commune-input" type="text" placeholder="Ex. Pau, Bayonne, Oloron…" autocomplete="off">
-        <button id="commune-clear" title="Effacer">✕</button>
-        <div id="commune-suggestions"></div>
+        <div id="commune-input-wrap">
+          <input id="commune-input" type="text" placeholder="Ex. Pau, Bayonne, Oloron…" autocomplete="off">
+          <button id="commune-clear" title="Effacer">✕</button>
+          <div id="commune-suggestions"></div>
+        </div>
       </div>
       <div id="commune-status"></div>
     </div>
