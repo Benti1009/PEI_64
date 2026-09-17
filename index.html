@@ -310,6 +310,7 @@
   .fab-mobile.on{ border-color:var(--accent); background:rgba(224,72,60,.18); }
   #point-toggle-btn{ bottom:24px; right:64px; }
   #filters-toggle-btn{ bottom:80px; right:12px; }
+  #commune-toggle-btn{ bottom:80px; right:64px; }
 
   .panel-close{
     display:none;
@@ -360,13 +361,24 @@
     #sidebar > header{ display:none; }
     #sidebar > .section{
       pointer-events:auto;
+      background:var(--panel);
       border:1px solid var(--line);
       border-radius:12px;
       margin-bottom:10px;
       box-shadow:0 8px 24px rgba(0,0,0,.45);
       position:relative;
+      width:min(320px, calc(100vw - 24px));
     }
     #sidebar > #stats{ display:none; }
+
+    /* Recherche commune : masquée par défaut, ouverte via le FAB loupe ;
+       le résultat (commune sélectionnée) reste visible même quand les contrôles se referment. */
+    #commune-box{ display:none; }
+    #sidebar.show-commune #commune-box,
+    #commune-box.has-result{ display:block; }
+    #commune-controls{ display:none; }
+    #sidebar.show-commune #commune-controls{ display:block; }
+    #commune-status:empty{ display:none; }
 
     /* Point de recherche : masqué par défaut, ouvert via le FAB 📍 ;
        le résultat reste visible même quand les contrôles se referment. */
@@ -395,10 +407,13 @@
     </header>
 
     <div class="section" id="commune-box">
-      <p class="section-label">Rechercher une commune</p>
-      <input id="commune-input" type="text" placeholder="Ex. Pau, Bayonne, Oloron…" autocomplete="off">
-      <button id="commune-clear" title="Effacer">✕</button>
-      <div id="commune-suggestions"></div>
+      <button id="commune-box-close" class="panel-close" title="Fermer">✕</button>
+      <div id="commune-controls">
+        <p class="section-label">Rechercher une commune</p>
+        <input id="commune-input" type="text" placeholder="Ex. Pau, Bayonne, Oloron…" autocomplete="off">
+        <button id="commune-clear" title="Effacer">✕</button>
+        <div id="commune-suggestions"></div>
+      </div>
       <div id="commune-status"></div>
     </div>
 
@@ -435,6 +450,9 @@
     <button id="point-toggle-btn" class="fab-mobile" title="PEI le plus proche">📍</button>
     <button id="filters-toggle-btn" class="fab-mobile" title="Filtres">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M8 12h8M11 18h2"/></svg>
+    </button>
+    <button id="commune-toggle-btn" class="fab-mobile" title="Rechercher une commune">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     </button>
   </main>
 </div>
@@ -634,6 +652,8 @@
 
   // ---------- Recherche commune (API Géo officielle, appelée côté client) ----------
   var communeIndex = []; // {nom, code, dep, lat, lon}
+  var communeBoxEl = document.getElementById('commune-box');
+  var communeBoxCloseBtn = document.getElementById('commune-box-close');
   var input = document.getElementById('commune-input');
   var suggestBox = document.getElementById('commune-suggestions');
   var clearBtn = document.getElementById('commune-clear');
@@ -697,6 +717,9 @@
     if(c.lat && c.lon){ map.setView([c.lat, c.lon], 14); }
     var count = allMarkers.filter(function(m){ return m.insee === c.code; }).length;
     statusEl.textContent = count + ' point(s) d\'eau à ' + c.nom;
+    communeBoxEl.classList.add('has-result');
+    sidebarEl.classList.remove('show-commune'); // sur mobile : referme les contrôles, garde le résultat
+    communeToggleBtn.classList.remove('on');
   }
 
   clearBtn.addEventListener('click', function(){
@@ -705,6 +728,7 @@
     statusEl.textContent = '';
     clearBtn.style.display = 'none';
     suggestBox.style.display = 'none';
+    communeBoxEl.classList.remove('has-result');
     applyFilters();
   });
 
@@ -714,26 +738,44 @@
     }
   });
 
-  // ---------- Boutons flottants mobile (panneaux "PEI proche" et "Filtres") ----------
+  // ---------- Boutons flottants mobile (panneaux "Commune", "PEI proche" et "Filtres") ----------
   var sidebarEl = document.getElementById('sidebar');
   var pointBoxEl = document.getElementById('point-box');
   var pointToggleBtn = document.getElementById('point-toggle-btn');
   var filtersToggleBtn = document.getElementById('filters-toggle-btn');
+  var communeToggleBtn = document.getElementById('commune-toggle-btn');
   var pointBoxCloseBtn = document.getElementById('point-box-close');
   var filtersPanelCloseBtn = document.getElementById('filters-panel-close');
 
-  pointToggleBtn.addEventListener('click', function(){
-    var open = sidebarEl.classList.toggle('show-point');
-    pointToggleBtn.classList.toggle('on', open);
-    sidebarEl.classList.remove('show-filters');
+  function closeAllMobilePanels(){
+    sidebarEl.classList.remove('show-point', 'show-filters', 'show-commune');
+    pointToggleBtn.classList.remove('on');
     filtersToggleBtn.classList.remove('on');
+    communeToggleBtn.classList.remove('on');
+  }
+
+  communeToggleBtn.addEventListener('click', function(){
+    var open = !sidebarEl.classList.contains('show-commune');
+    closeAllMobilePanels();
+    if(open){ sidebarEl.classList.add('show-commune'); communeToggleBtn.classList.add('on'); }
+  });
+
+  pointToggleBtn.addEventListener('click', function(){
+    var open = !sidebarEl.classList.contains('show-point');
+    closeAllMobilePanels();
+    if(open){ sidebarEl.classList.add('show-point'); pointToggleBtn.classList.add('on'); }
   });
 
   filtersToggleBtn.addEventListener('click', function(){
-    var open = sidebarEl.classList.toggle('show-filters');
-    filtersToggleBtn.classList.toggle('on', open);
-    sidebarEl.classList.remove('show-point');
-    pointToggleBtn.classList.remove('on');
+    var open = !sidebarEl.classList.contains('show-filters');
+    closeAllMobilePanels();
+    if(open){ sidebarEl.classList.add('show-filters'); filtersToggleBtn.classList.add('on'); }
+  });
+
+  communeBoxCloseBtn.addEventListener('click', function(){
+    sidebarEl.classList.remove('show-commune');
+    communeToggleBtn.classList.remove('on');
+    communeBoxEl.classList.remove('has-result');
   });
 
   pointBoxCloseBtn.addEventListener('click', function(){
