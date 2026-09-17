@@ -109,15 +109,14 @@
   }
   #commune-clear:hover{ background:var(--line); color:var(--text); }
   #commune-suggestions{
-    position:absolute;
-    left:0; right:0; top:calc(100% + 4px);
+    position:fixed;
     background:var(--panel-2);
     border:1px solid var(--line);
     border-radius:8px;
     max-height:220px;
     overflow-y:auto;
     display:none;
-    z-index:1300;
+    z-index:3000;
     box-shadow:0 8px 24px rgba(0,0,0,.4);
   }
   #commune-suggestions button{
@@ -709,6 +708,10 @@
       btn.addEventListener('click', function(){ selectCommune(c); });
       suggestBox.appendChild(btn);
     });
+    var rect = input.getBoundingClientRect();
+    suggestBox.style.left = rect.left + 'px';
+    suggestBox.style.width = rect.width + 'px';
+    suggestBox.style.top = (rect.bottom + 4) + 'px';
     suggestBox.style.display = 'block';
   });
 
