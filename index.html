@@ -848,6 +848,19 @@
     measureToggleBtn.classList.remove('on');
   }
 
+  // Sur mobile : un clic/tap en dehors des panneaux les referme (pas seulement la croix)
+  document.addEventListener('click', function(e){
+    if(pickMode || measureMode) return; // ces modes gèrent déjà leurs propres clics sur la carte, ne pas interférer
+    var anyOpen = sidebarEl.classList.contains('show-point') ||
+                  sidebarEl.classList.contains('show-commune') ||
+                  sidebarEl.classList.contains('show-filters') ||
+                  sidebarEl.classList.contains('show-measure');
+    if(!anyOpen) return;
+    if(sidebarEl.contains(e.target)) return; // clic à l'intérieur d'un panneau
+    if(e.target.closest('.fab-mobile')) return; // les boutons gèrent déjà l'ouverture/fermeture
+    closeAllMobilePanels();
+  });
+
   communeToggleBtn.addEventListener('click', function(){
     var open = !sidebarEl.classList.contains('show-commune');
     closeAllMobilePanels();
