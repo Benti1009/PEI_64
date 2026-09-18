@@ -690,6 +690,8 @@
       var communeName = resolveCommuneName(p.commune);
       var marker = L.marker([lat, lon], { icon: iconFor(type) });
       marker.bindPopup(popupHtml(p, communeName));
+      marker.on('mouseover', function(){ this.openPopup(); });
+      marker.on('mouseout', function(){ this.closePopup(); });
       allMarkers.push({ marker: marker, commune: communeName, type: type });
     });
   }
@@ -941,19 +943,35 @@
   }
 
   function parsePoint(text){
-    var m = text.trim().match(/^(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)$/);
-    if(!m) return null;
-    var lat = parseFloat(m[1].replace(',', '.'));
-    var lon = parseFloat(m[2].replace(',', '.'));
-    if(isNaN(lat) || isNaN(lon)) return null;
-    if(lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-    return { lat: lat, lon: lon };
+    var t = text.trim();
+
+    // Format simple "latitude, longitude" (point ou virgule comme séparateur décimal)
+    var m = t.match(/^(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)$/);
+    if(m){
+      var lat = parseFloat(m[1].replace(',', '.'));
+      var lon = parseFloat(m[2].replace(',', '.'));
+      if(isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+      return { lat: lat, lon: lon };
+    }
+
+    // Format degrés + point cardinal, ex. 43,31087° N, 0,32544° O (ou W)
+    var m2 = t.match(/^(\d+(?:[.,]\d+)?)\s*°?\s*([NS])\s*[,;\s]\s*(\d+(?:[.,]\d+)?)\s*°?\s*([EOW])$/i);
+    if(m2){
+      var latVal = parseFloat(m2[1].replace(',', '.'));
+      var lonVal = parseFloat(m2[3].replace(',', '.'));
+      if(/^s$/i.test(m2[2])) latVal = -latVal;
+      if(/^[ow]$/i.test(m2[4])) lonVal = -lonVal;
+      if(isNaN(latVal) || isNaN(lonVal) || latVal < -90 || latVal > 90 || lonVal < -180 || lonVal > 180) return null;
+      return { lat: latVal, lon: lonVal };
+    }
+
+    return null;
   }
 
   pointSearchBtn.addEventListener('click', function(){
     var p = parsePoint(pointInput.value);
     if(!p){
-      pointResult.innerHTML = '<div class="pr-card pr-error">Format non reconnu. Utilise "latitude, longitude", ex. 43.1206, -0.2011</div>';
+      pointResult.innerHTML = '<div class="pr-card pr-error">Format non reconnu. Ex. 43.1206, -0.2011 ou 43,31087° N, 0,32544° O</div>';
       return;
     }
     setSearchPoint(L.latLng(p.lat, p.lon));
