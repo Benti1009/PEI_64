@@ -405,6 +405,8 @@
     #measure-controls{ display:none; }
     #sidebar.show-measure #measure-controls{ display:block; }
     #measure-result:empty{ display:none; }
+    /* Le pavé ne doit plus grandir au-delà de ~3 segments visibles : le reste défile dans la liste */
+    #measure-result .ms-list{ max-height:90px; }
 
     /* Filtres : masqués par défaut, ouverts via le FAB entonnoir */
     #filters-panel{ display:none; }
@@ -584,19 +586,40 @@
   var statsEl = document.getElementById('stats');
 
   // ---------- Chargement des données ----------
-  var COMMUNES_API_URL = 'https://geo.api.gouv.fr/departements/64/communes?fields=nom,code,centre&format=json&geometry=centre';
+  // Dans le fichier source, la propriété "commune" est parfois un nom (secteur Soumoulou/Pontacq,
+  // saisi à la main) et parfois un code INSEE brut (reste du 64 et communes limitrophes 65/40/32,
+  // issues d'un croisement géographique automatique). On résout ces codes en vrais noms via l'API.
+  var codeToName = {};
+  function resolveCommuneName(raw){
+    if(raw && /^\d{5}$/.test(raw) && codeToName[raw]) return codeToName[raw];
+    return raw || '—';
+  }
 
-  Promise.all([
-    fetch('data/hydrants.geojson').then(function(r){ return r.json(); }),
-    fetch(COMMUNES_API_URL).then(function(r){ return r.json(); }).catch(function(){ return []; }) // si hors-ligne : repli sur les communes déjà présentes dans les données locales
-  ]).then(function(results){
-    allFeatures = results[0].features;
-    buildFilters();
-    buildMarkers();
-    applyFilters();
-    buildCommuneIndex(results[1]);
-    centerOnDefaultView();
-    loadingEl.style.display = 'none';
+  fetch('data/hydrants.geojson').then(function(r){ return r.json(); }).then(function(geojson){
+    allFeatures = geojson.features;
+
+    // Départements présents dans les codes INSEE bruts du jeu de données (64 + éventuels voisins)
+    var deptCodes = { '64': true };
+    allFeatures.forEach(function(f){
+      var v = f.properties.commune;
+      if(v && /^\d{5}$/.test(v)) deptCodes[v.slice(0,2)] = true;
+    });
+
+    return Promise.all(Object.keys(deptCodes).map(function(dep){
+      return fetch('https://geo.api.gouv.fr/departements/' + dep + '/communes?fields=nom,code,centre&format=json&geometry=centre')
+        .then(function(r){ return r.json(); })
+        .catch(function(){ return []; }); // si hors-ligne ou département introuvable : ignoré, pas de blocage
+    })).then(function(lists){
+      var communesApi = [].concat.apply([], lists);
+      communesApi.forEach(function(c){ codeToName[c.code] = c.nom; });
+
+      buildFilters();
+      buildMarkers();
+      applyFilters();
+      buildCommuneIndex(communesApi);
+      centerOnDefaultView();
+      loadingEl.style.display = 'none';
+    });
   }).catch(function(err){
     loadingText.textContent = "Erreur de chargement des données : " + err.message;
   });
@@ -663,14 +686,15 @@
       var p = f.properties;
       var lon = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
       var type = p.type || 'Autre';
+      var communeName = resolveCommuneName(p.commune);
       var marker = L.marker([lat, lon], { icon: iconFor(type) });
-      marker.bindPopup(popupHtml(p));
-      allMarkers.push({ marker: marker, commune: p.commune || '—', type: type });
+      marker.bindPopup(popupHtml(p, communeName));
+      allMarkers.push({ marker: marker, commune: communeName, type: type });
     });
   }
 
-  function popupHtml(p){
-    var html = '<div class="badge">' + (p.commune || '—') + '</div>';
+  function popupHtml(p, communeName){
+    var html = '<div class="badge">' + (communeName || '—') + '</div>';
     html += '<p class="popup-type">' + (p.type || 'Point d\'eau') + '</p>';
     if(p.x && p.y) html += '<div class="popup-row" style="font-size:11px;opacity:.7;">Lambert 93 : ' + p.x + ' ; ' + p.y + '</div>';
     return html;
@@ -703,15 +727,16 @@
   }
 
   function buildCommuneIndex(communesApi){
-    // Nombre de PEI recensés par commune, à partir des données locales
+    // Nombre de PEI recensés par commune : basé sur les noms déjà résolus des marqueurs
+    // (allMarkers.commune est le vrai nom, que la source d'origine ait fourni un nom ou un code INSEE)
     var countByName = {};
-    allFeatures.forEach(function(f){
-      var key = normalize(f.properties.commune || '—');
+    allMarkers.forEach(function(item){
+      var key = normalize(item.commune);
       countByName[key] = (countByName[key] || 0) + 1;
     });
 
     if(communesApi && communesApi.length){
-      // Référentiel officiel (code INSEE + nom) : toutes les communes du 64, même sans PEI recensé
+      // Référentiel officiel (code INSEE + nom) : toutes les communes concernées, même sans PEI recensé
       communeIndex = communesApi.filter(function(c){ return c.centre; }).map(function(c){
         return {
           nom: c.nom,
@@ -722,15 +747,15 @@
         };
       }).sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
     } else {
-      // Repli hors-ligne : uniquement les communes déjà présentes dans les données locales
+      // Repli hors-ligne : uniquement les communes déjà présentes dans les marqueurs locaux
       var byName = {};
-      allFeatures.forEach(function(f){
-        var nom = f.properties.commune || '—';
-        var c = f.geometry.coordinates;
+      allMarkers.forEach(function(item){
+        var nom = item.commune;
+        var ll = item.marker.getLatLng();
         if(!byName[nom]) byName[nom] = { nom:nom, n:0, sumLat:0, sumLon:0 };
         byName[nom].n++;
-        byName[nom].sumLon += c[0];
-        byName[nom].sumLat += c[1];
+        byName[nom].sumLon += ll.lng;
+        byName[nom].sumLat += ll.lat;
       });
       communeIndex = Object.keys(byName).map(function(nom){
         var o = byName[nom];
