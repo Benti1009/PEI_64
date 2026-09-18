@@ -48,7 +48,8 @@
     display:flex;
     flex-direction:column;
     height:100%;
-    overflow:hidden;
+    overflow-y:auto;
+    overflow-x:hidden;
     z-index:1200;
   }
   header{
@@ -164,6 +165,7 @@
   .point-btn.on{ border-color:var(--accent); background:rgba(224,72,60,.16); }
   .point-btn.ghost{ color:var(--text-dim); }
   #measure-result{ margin-top:10px; }
+  #measure-result .ms-list{ max-height:220px; overflow-y:auto; overflow-x:hidden; padding-right:4px; }
   #measure-result .ms-row{ display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid var(--line); color:var(--text-dim); font-size:13px; }
   #measure-result .ms-row:last-child{ border-bottom:none; }
   #measure-result .ms-row b{ color:var(--text); font-weight:500; }
@@ -582,20 +584,22 @@
   var statsEl = document.getElementById('stats');
 
   // ---------- Chargement des données ----------
-  fetch('data/hydrants.geojson')
-    .then(function(r){ return r.json(); })
-    .then(function(geojson){
-      allFeatures = geojson.features;
-      buildFilters();
-      buildMarkers();
-      applyFilters();
-      buildCommuneIndex();
-      centerOnDefaultView();
-      loadingEl.style.display = 'none';
-    })
-    .catch(function(err){
-      loadingText.textContent = "Erreur de chargement des données : " + err.message;
-    });
+  var COMMUNES_API_URL = 'https://geo.api.gouv.fr/departements/64/communes?fields=nom,code,centre&format=json&geometry=centre';
+
+  Promise.all([
+    fetch('data/hydrants.geojson').then(function(r){ return r.json(); }),
+    fetch(COMMUNES_API_URL).then(function(r){ return r.json(); }).catch(function(){ return []; }) // si hors-ligne : repli sur les communes déjà présentes dans les données locales
+  ]).then(function(results){
+    allFeatures = results[0].features;
+    buildFilters();
+    buildMarkers();
+    applyFilters();
+    buildCommuneIndex(results[1]);
+    centerOnDefaultView();
+    loadingEl.style.display = 'none';
+  }).catch(function(err){
+    loadingText.textContent = "Erreur de chargement des données : " + err.message;
+  });
 
   function buildFilters(){
     var types = {};
@@ -675,17 +679,18 @@
   function applyFilters(){
     cluster.clearLayers();
     var visible = [];
+    var communeNorm = activeCommune ? normalize(activeCommune) : null;
     allMarkers.forEach(function(item){
       if(!activeTypes.has(item.type)) return;
-      if(activeCommune && item.commune !== activeCommune) return;
+      if(communeNorm && normalize(item.commune) !== communeNorm) return;
       visible.push(item.marker);
     });
     cluster.addLayers(visible);
     statsEl.innerHTML = '<b>' + visible.length.toLocaleString('fr-FR') + '</b> points affichés<br>sur <b>' + allMarkers.length.toLocaleString('fr-FR') + '</b> au total';
   }
 
-  // ---------- Recherche commune (API Géo officielle, appelée côté client) ----------
-  var communeIndex = []; // {nom, n, lat, lon}
+  // ---------- Recherche commune (référentiel INSEE via l'API Géo officielle, appelée côté client) ----------
+  var communeIndex = []; // {nom, code (INSEE), n, lat, lon}
   var communeBoxEl = document.getElementById('commune-box');
   var communeBoxCloseBtn = document.getElementById('commune-box-close');
   var input = document.getElementById('commune-input');
@@ -693,38 +698,67 @@
   var clearBtn = document.getElementById('commune-clear');
   var statusEl = document.getElementById('commune-status');
 
-  function buildCommuneIndex(){
-    var byName = {};
-    allFeatures.forEach(function(f){
-      var nom = f.properties.commune || '—';
-      var c = f.geometry.coordinates;
-      if(!byName[nom]) byName[nom] = { nom:nom, n:0, sumLat:0, sumLon:0 };
-      byName[nom].n++;
-      byName[nom].sumLon += c[0];
-      byName[nom].sumLat += c[1];
-    });
-    communeIndex = Object.keys(byName).map(function(nom){
-      var o = byName[nom];
-      return { nom:nom, n:o.n, lat:o.sumLat/o.n, lon:o.sumLon/o.n };
-    }).sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
-  }
-
   function normalize(s){
     return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+
+  function buildCommuneIndex(communesApi){
+    // Nombre de PEI recensés par commune, à partir des données locales
+    var countByName = {};
+    allFeatures.forEach(function(f){
+      var key = normalize(f.properties.commune || '—');
+      countByName[key] = (countByName[key] || 0) + 1;
+    });
+
+    if(communesApi && communesApi.length){
+      // Référentiel officiel (code INSEE + nom) : toutes les communes du 64, même sans PEI recensé
+      communeIndex = communesApi.filter(function(c){ return c.centre; }).map(function(c){
+        return {
+          nom: c.nom,
+          code: c.code,
+          n: countByName[normalize(c.nom)] || 0,
+          lon: c.centre.coordinates[0],
+          lat: c.centre.coordinates[1]
+        };
+      }).sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
+    } else {
+      // Repli hors-ligne : uniquement les communes déjà présentes dans les données locales
+      var byName = {};
+      allFeatures.forEach(function(f){
+        var nom = f.properties.commune || '—';
+        var c = f.geometry.coordinates;
+        if(!byName[nom]) byName[nom] = { nom:nom, n:0, sumLat:0, sumLon:0 };
+        byName[nom].n++;
+        byName[nom].sumLon += c[0];
+        byName[nom].sumLat += c[1];
+      });
+      communeIndex = Object.keys(byName).map(function(nom){
+        var o = byName[nom];
+        return { nom:nom, code:null, n:o.n, lat:o.sumLat/o.n, lon:o.sumLon/o.n };
+      }).sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
+    }
   }
 
   input.addEventListener('input', function(){
     var q = normalize(input.value.trim());
     clearBtn.style.display = input.value ? 'block' : 'none';
     if(q.length < 2){ suggestBox.style.display = 'none'; return; }
-    var matches = communeIndex.filter(function(c){ return normalize(c.nom).indexOf(q) === 0; })
-      .concat(communeIndex.filter(function(c){ return normalize(c.nom).indexOf(q) > 0; }))
-      .slice(0, 8);
+    var starts = communeIndex.filter(function(c){ return normalize(c.nom).indexOf(q) === 0; });
+    var byCode = communeIndex.filter(function(c){ return c.code && c.code.indexOf(q) === 0; });
+    var contains = communeIndex.filter(function(c){ return normalize(c.nom).indexOf(q) > 0; });
+    var seen = {};
+    var matches = starts.concat(byCode, contains).filter(function(c){
+      var key = c.code || c.nom;
+      if(seen[key]) return false;
+      seen[key] = true;
+      return true;
+    }).slice(0, 8);
     if(matches.length === 0){ suggestBox.style.display = 'none'; return; }
     suggestBox.innerHTML = '';
     matches.forEach(function(c){
       var btn = document.createElement('button');
-      btn.innerHTML = c.nom + ' <span class="dep">— ' + c.n + ' PEI</span>';
+      var countLabel = c.n ? (c.n + ' PEI') : 'aucun PEI recensé';
+      btn.innerHTML = c.nom + ' <span class="dep">— ' + countLabel + (c.code ? ' · ' + c.code : '') + '</span>';
       btn.addEventListener('click', function(){ selectCommune(c); });
       suggestBox.appendChild(btn);
     });
@@ -740,11 +774,13 @@
     suggestBox.style.display = 'none';
     activeCommune = c.nom;
     applyFilters();
-    var pts = allMarkers.filter(function(m){ return m.commune === c.nom; });
+    var pts = allMarkers.filter(function(m){ return normalize(m.commune) === normalize(c.nom); });
     if(pts.length){
       map.fitBounds(L.featureGroup(pts.map(function(m){ return m.marker; })).getBounds().pad(0.3));
+    } else if(c.lat && c.lon){
+      map.fitBounds(L.latLng(c.lat, c.lon).toBounds(6000)); // pas de PEI recensé : on cadre sur le centre officiel de la commune
     }
-    statusEl.textContent = pts.length + ' point(s) d\'eau à ' + c.nom;
+    statusEl.textContent = pts.length ? (pts.length + ' point(s) d\'eau à ' + c.nom) : ('Aucun PEI recensé à ' + c.nom);
     communeBoxEl.classList.add('has-result');
     sidebarEl.classList.remove('show-commune'); // sur mobile : referme les contrôles, garde le résultat
     communeToggleBtn.classList.remove('on');
@@ -1050,13 +1086,14 @@
       measureResult.innerHTML = '<div class="ms-hint">Clique un 2ᵉ point sur la carte pour mesurer une distance.</div>';
       return;
     }
-    var html = '';
+    var listHtml = '';
     var total = 0;
     for(var i=1;i<measurePoints.length;i++){
       var d = haversine(measurePoints[i-1].lat, measurePoints[i-1].lng, measurePoints[i].lat, measurePoints[i].lng);
       total += d;
-      html += '<div class="ms-row"><span>Segment ' + i + ' → ' + (i+1) + '</span><b>' + formatDistance(d) + '</b></div>';
+      listHtml += '<div class="ms-row"><span>Segment ' + i + ' → ' + (i+1) + '</span><b>' + formatDistance(d) + '</b></div>';
     }
+    var html = '<div class="ms-list">' + listHtml + '</div>';
     html += '<div class="ms-total">' + formatDistance(total) + '</div>';
     html += '<div class="ms-hint">Distance totale à vol d\'oiseau, ' + measurePoints.length + ' points</div>';
     measureResult.innerHTML = html;
