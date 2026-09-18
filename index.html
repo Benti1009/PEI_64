@@ -618,6 +618,7 @@
       applyFilters();
       buildCommuneIndex(communesApi);
       centerOnDefaultView();
+      handleIncomingLocation(); // si l'appli est ouverte avec ?lat=..&lon=.. (ex. via un Raccourci iOS), lance direct la recherche du PEI le plus proche
       loadingEl.style.display = 'none';
     });
   }).catch(function(err){
@@ -974,6 +975,19 @@
     if(bestMarkerLayer){ map.removeLayer(bestMarkerLayer); bestMarkerLayer = null; }
     if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
   });
+
+  // ---------- Réception d'un point venant d'une autre app (ex. Raccourci iOS partagé depuis Plans) ----------
+  // Ouvrir l'appli avec ?lat=..&lon=.. déclenche directement la recherche du PEI le plus proche de ce point.
+  function handleIncomingLocation(){
+    var params = new URLSearchParams(window.location.search);
+    var lat = parseFloat(params.get('lat'));
+    var lon = parseFloat(params.get('lon'));
+    if(isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    setSearchPoint(L.latLng(lat, lon));
+    if(window.history && window.history.replaceState){
+      window.history.replaceState(null, '', window.location.pathname); // évite de relancer la même recherche à un rechargement
+    }
+  }
 
   function setSearchPoint(latlng){
     if(searchMarker){ map.removeLayer(searchMarker); }
