@@ -508,7 +508,7 @@
   };
   var DEFAULT_COLOR = '#8a93a1';
 
-  var map = L.map('map', { zoomControl:false, preferCanvas:true }).setView([43.30,-0.20], 11);
+  var map = L.map('map', { zoomControl:false, preferCanvas:true }).setView([43.264,-0.189], 12);
 
   // ---------- Fonds de carte ----------
   var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -590,7 +590,7 @@
       buildMarkers();
       applyFilters();
       buildCommuneIndex();
-      fitToData();
+      centerOnDefaultView();
       loadingEl.style.display = 'none';
     })
     .catch(function(err){
@@ -606,9 +606,10 @@
 
     var typeBox = document.getElementById('type-filters');
     Object.keys(types).sort(function(a,b){ return types[b]-types[a]; }).forEach(function(t){
-      activeTypes.add(t);
+      var onByDefault = (t !== 'Autre'); // les PEI "Autre" sont désactivés par défaut
+      if(onByDefault) activeTypes.add(t);
       var chip = document.createElement('div');
-      chip.className = 'chip on';
+      chip.className = onByDefault ? 'chip on' : 'chip';
       chip.style.setProperty('--dot', TYPE_COLORS[t] || DEFAULT_COLOR);
       chip.innerHTML = '<span class="dot"></span>' + t + ' <span style="opacity:.6">(' + types[t] + ')</span>';
       chip.addEventListener('click', function(){
@@ -624,6 +625,19 @@
     if(!allMarkers.length) return;
     var group = L.featureGroup(allMarkers.map(function(m){ return m.marker; }));
     map.fitBounds(group.getBounds().pad(0.08));
+  }
+
+  // Vue par défaut à l'ouverture : centrée sur Soumoulou, cadrée sur ~10 km autour.
+  var HOME_COMMUNE = 'Soumoulou';
+  function centerOnDefaultView(){
+    var home = communeIndex.filter(function(c){
+      return normalize(c.nom) === normalize(HOME_COMMUNE);
+    })[0];
+    if(home){
+      map.fitBounds(L.latLng(home.lat, home.lon).toBounds(20000)); // carré de 20 km de côté = ~10 km autour du centre
+    } else {
+      fitToData();
+    }
   }
 
   function toggleAllFilters(){
@@ -908,8 +922,7 @@
     pointClearBtn.style.display = 'inline-block';
     pointResult.innerHTML = '<div class="pr-card pr-loading"><span class="pr-spin"></span> Recherche du PEI le plus proche…</div>';
     pointBoxEl.classList.add('has-result');
-    sidebarEl.classList.remove('show-point'); // sur mobile : referme les contrôles, ne garde que le résultat
-    pointToggleBtn.classList.remove('on');
+    closeAllMobilePanels(); // referme toutes les fenêtres pour dégager la carte
     findNearestByRoad(latlng);
   }
 
@@ -964,20 +977,22 @@
   }
 
   function showBestResult(best, distMeters, durSeconds, latlng){
-    var p = best.item.marker.getPopup().getContent();
-    bestMarkerLayer = L.marker([best.lat, best.lon], { icon: bestIcon }).addTo(map);
-    bestMarkerLayer.bindPopup(p);
-
     var distKm = (distMeters/1000).toFixed(distMeters < 10000 ? 2 : 1);
     var durMin = Math.round(durSeconds/60);
 
-    pointResult.innerHTML =
-      '<div class="pr-card">' +
-        '<div class="pr-dist">' + distKm + ' km <span style="font-size:13px;color:var(--text-dim);font-weight:400;">— ' + durMin + ' min en voiture</span></div>' +
-        '<div class="pr-sub">Distance par la route jusqu\'au PEI le plus proche</div>' +
-        '<div class="pr-row">Type : <b>' + best.item.type + '</b></div>' +
-        '<div class="pr-row">Commune : <b>' + best.item.commune + '</b></div>' +
+    // Info bulle unique, affichée directement sur la carte à côté du PEI trouvé
+    var bubble = best.item.marker.getPopup().getContent() +
+      '<div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">' +
+        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:19px;color:var(--accent);">' + distKm + ' km</span>' +
+        '<span style="color:var(--text-dim);"> — ' + durMin + ' min en voiture</span>' +
       '</div>';
+
+    bestMarkerLayer = L.marker([best.lat, best.lon], { icon: bestIcon }).addTo(map);
+    bestMarkerLayer.bindPopup(bubble);
+
+    // Le résultat n'est plus affiché dans le panneau : seule l'info bulle sur la carte reste visible
+    pointResult.innerHTML = '';
+    pointBoxEl.classList.remove('has-result');
 
     var group = L.featureGroup([searchMarker, bestMarkerLayer, routeLayer].filter(Boolean));
     map.fitBounds(group.getBounds().pad(0.25));
