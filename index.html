@@ -1083,13 +1083,13 @@
   }
 
   function showBestResult(best, distMeters, durSeconds, latlng){
-    var distKm = (distMeters/1000).toFixed(distMeters < 10000 ? 2 : 1);
+    var distLabel = formatDistance(distMeters);
     var durMin = Math.round(durSeconds/60);
 
     // Info bulle unique, affichée directement sur la carte à côté du PEI trouvé
     var bubble = best.item.marker.getPopup().getContent() +
       '<div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">' +
-        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:19px;color:var(--accent);">' + distKm + ' km</span>' +
+        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:19px;color:var(--accent);">' + distLabel + '</span>' +
         '<span style="color:var(--text-dim);"> — ' + durMin + ' min en voiture</span>' +
       '</div>';
 
