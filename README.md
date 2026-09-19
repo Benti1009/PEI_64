@@ -2,15 +2,21 @@
 
 ## Contenu
 - `index.html` — la carte (Leaflet, clustering, fonds OSM/IGN, recherche par commune, filtres par type)
-- `data/hydrants.geojson` — 270 points d'eau incendie répartis sur 22 communes (~53 Ko)
+- `data/hydrants.geojson` — les 270 PEI du secteur (22 communes, avec leurs coordonnées Lambert 93 `x`/`y`)
+  + ~14 000 autres points du 64 (type « Autre », commune = code INSEE), désactivés par défaut sur la carte
+- `settings.js`, `settings.css`, `pei-update.js` — rubrique **Paramètres > Mise à jour des PEI** (voir plus bas)
 - `manifest.json` + `icons/` — pour que l'app soit installable sur mobile
 - Aucun service worker : pas de mode hors-ligne (comme demandé)
 
 ## Jeu de données
-Les points proviennent de deux exports Excel (un avec le type de PEI, un avec la commune),
-fusionnés ligne à ligne puis reprojetés de **Lambert 93 (EPSG:2154) vers WGS84** pour être
-exploitables en GeoJSON. La conversion est faite en amont, à la génération du fichier :
-l'app n'a aucun calcul de projection à faire.
+Les 270 points du secteur proviennent de deux exports Excel du site Escort (un avec le type de PEI,
+un avec la commune), appariés par leurs coordonnées X/Y puis reprojetés de
+**Lambert 93 (EPSG:2154) vers WGS84** pour être exploitables en GeoJSON. La conversion se fait à la
+génération du fichier (voir « Mise à jour des PEI ») : la carte n'a aucun calcul de projection à faire.
+
+**Repère important :** dans `hydrants.geojson`, un point du secteur est un point qui porte les
+propriétés `x` et `y`. C'est ce qui permet à l'outil de mise à jour de remplacer uniquement ces
+270 points et de laisser tous les autres intacts.
 
 Champs de chaque point :
 
@@ -54,6 +60,25 @@ L'app calcule alors le PEI le plus proche **par la route (mode voiture)**, pas �
 ⚠️ Cette fonctionnalité nécessite une connexion internet et dépend du serveur de démonstration
 public d'OSRM, qui n'offre pas de garantie de disponibilité en production. Pour fiabiliser :
 héberger sa propre instance OSRM, ou passer par un service payant (OpenRouteService, Mapbox).
+
+## Mise à jour des PEI du secteur
+Depuis un **PC uniquement** : lien **⚙ Paramètres** en bas de la barre latérale > rubrique
+« Mise à jour des PEI ». La rubrique décrit pas à pas les deux exports à faire sur
+dei64.escort.fr (Pavé « PEI » > « Statistiques » : Désignation / Commune + Point SIG X + Point SIG Y,
+puis Désignation / type + Point SIG X + Point SIG Y), puis :
+
+1. les 2 fichiers Excel sont déposés dans la fenêtre (glisser-déposer, bouton, ou Ctrl+V) ;
+2. ils sont **vérifiés avant toute génération** : format des colonnes, X/Y inversés, coordonnées
+   hors Lambert 93, deux exports de même nature, lignes sans correspondance entre les deux fichiers,
+   types inconnus, écart important avec le fichier actuel ;
+3. si tout est bon, le bouton « Générer hydrants.geojson » télécharge le nouveau fichier (points du
+   secteur remplacés, tous les autres points conservés tels quels) ;
+4. ce fichier est déposé à la main dans le dossier `data` du dépôt GitHub (« Add file » > « Upload files »
+   > « Commit changes »).
+
+Tout se fait dans le navigateur : aucun identifiant n'est stocké ni envoyé, aucun jeton GitHub n'est
+nécessaire, les fichiers Excel ne quittent pas le PC. L'outil a besoin de charger le
+`data/hydrants.geojson` actuel : il doit donc être utilisé depuis le site publié (GitHub Pages).
 
 ## Mise en ligne sur GitHub Pages
 1. Crée un dépôt GitHub (ou utilise un dépôt existant).

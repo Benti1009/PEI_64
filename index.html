@@ -416,6 +416,7 @@
     .fab-mobile{ display:flex; }
   }
 </style>
+<link rel="stylesheet" href="settings.css">
 </head>
 <body>
 <div id="app">
@@ -473,6 +474,13 @@
     </div>
 
     <div id="stats"></div>
+
+    <div id="settings-link-row">
+      <button id="settings-open" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </button>
+    </div>
   </aside>
 
   <main style="position:relative;">
@@ -491,11 +499,68 @@
   </main>
 </div>
 
+<dialog id="settings-dialog" aria-labelledby="settings-title">
+  <div class="st-head">
+    <h2 id="settings-title">Paramètres</h2>
+    <button type="button" id="settings-close" class="st-close" aria-label="Fermer">✕</button>
+  </div>
+  <div class="st-body">
+    <section class="st-section" id="maj-pei">
+      <h3>Mise à jour des <span>PEI</span></h3>
+
+      <p class="st-notice">💻 <b>Uniquement depuis un PC.</b> Cette opération est impossible depuis un mobile ou une tablette.</p>
+      <p class="st-lead">Les PEI du secteur viennent de deux exports Excel du site Escort (un avec les communes, un avec les types). Suis les étapes ci-dessous : les deux fichiers sont vérifiés, puis convertis en un seul fichier <code>hydrants.geojson</code> à déposer sur GitHub.</p>
+
+      <ol class="st-steps">
+        <li>Se connecter sur <a href="https://dei64.escort.fr" target="_blank" rel="noopener noreferrer">dei64.escort.fr</a>.</li>
+        <li>Dans le pavé <b>« PEI »</b>, cliquer sur <b>« Statistiques »</b>.</li>
+        <li>
+          <span class="st-tag">Export n°1</span><b>Les communes</b><br>
+          Dans <b>« Critères de sélection »</b> (maintenir la touche <kbd>Ctrl</kbd> pour sélectionner plusieurs données), choisir dans cet ordre :
+          <ul>
+            <li>Rubrique <b>« Situation »</b> : <b>Désignation / Commune</b></li>
+            <li>Rubrique <b>« Localisation »</b> : <b>Point SIG X</b></li>
+            <li>Rubrique <b>« Localisation »</b> : <b>Point SIG Y</b></li>
+          </ul>
+          Puis cliquer sur <b>« Calculer »</b>, ensuite sur les <b>2 flèches pointant vers le bas</b> en haut à droite du tableau, et enfin sur <b>« Exporter vers Excel »</b>.
+        </li>
+        <li>
+          <span class="st-tag">Export n°2</span><b>Les types</b><br>
+          Refaire l'étape 3 en remplaçant le premier critère par la rubrique <b>« Type de PEI »</b> : <b>Désignation / type</b> (Point SIG X et Point SIG Y restent les mêmes).
+        </li>
+        <li>
+          Déposer les <b>2 fichiers Excel</b> obtenus ci-dessous (l'ordre n'a pas d'importance). Ils sont vérifiés avant de pouvoir générer le fichier.
+          <div id="maj-tool">
+            <div id="maj-drop">
+              <p>Glisse ici tes 2 fichiers Excel, ou colle-les avec <kbd>Ctrl</kbd> + <kbd>V</kbd></p>
+              <button type="button" class="st-btn" id="maj-pick">Choisir les fichiers…</button>
+              <input type="file" id="maj-input" accept=".xlsx" multiple hidden>
+              <p class="st-privacy">🔒 Les fichiers restent sur ton PC : ils sont lus dans ton navigateur, rien n'est envoyé.</p>
+            </div>
+            <ul id="maj-files"></ul>
+            <div id="maj-report" aria-live="polite"></div>
+            <div id="maj-actions">
+              <button type="button" class="st-btn primary" id="maj-build" disabled>⬇ Générer hydrants.geojson</button>
+              <button type="button" class="st-btn ghost" id="maj-reset" hidden>Recommencer</button>
+            </div>
+            <div id="maj-result" hidden></div>
+          </div>
+        </li>
+        <li>
+          Sur GitHub, ouvrir le dossier <code>data</code> du dépôt, puis <b>« Add file »</b> → <b>« Upload files »</b>, déposer le fichier généré (il remplace l'ancien) et valider avec <b>« Commit changes »</b>. Le site est à jour au bout d'une à deux minutes.
+        </li>
+      </ol>
+    </section>
+  </div>
+</dialog>
+
 <div id="loading">
   <div class="spin"></div>
   <p id="loading-text">Chargement des points d'eau…</p>
 </div>
 
+<script src="pei-update.js"></script>
+<script src="settings.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <script>
