@@ -1080,9 +1080,25 @@
     var lat = parseFloat(params.get('lat'));
     var lon = parseFloat(params.get('lon'));
     if(isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    activateOtherFilter(); // point reçu depuis une autre app : on inclut aussi les PEI "Autre", désactivés par défaut sinon
     setSearchPoint(L.latLng(lat, lon));
     if(window.history && window.history.replaceState){
       window.history.replaceState(null, '', window.location.pathname); // évite de relancer la même recherche à un rechargement
+    }
+  }
+
+  // Active le filtre "Autre" (coche sa puce dans le panneau Filtres) sans toucher
+  // aux autres filtres, uniquement pour le cas d'une ouverture via ?lat=..&lon=..
+  // Une ouverture classique de l'appli garde le comportement normal ("Autre" décoché).
+  function activateOtherFilter(){
+    if(activeTypes.has('Autre')) return;
+    activeTypes.add('Autre');
+    var typeChips = document.getElementById('type-filters').children;
+    for(var i=0; i<typeChips.length; i++){
+      if(typeChips[i].textContent.indexOf('Autre') === 0){
+        typeChips[i].classList.add('on');
+        break;
+      }
     }
   }
 
