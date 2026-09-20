@@ -1087,13 +1087,24 @@
 
   // ---------- Réception d'un point venant d'une autre app (ex. Raccourci iOS partagé depuis Plans) ----------
   // Ouvrir l'appli avec ?lat=..&lon=.. déclenche directement la recherche du PEI le plus proche de ce point.
+  // Le paramètre ?q=.. est aussi accepté, avec les mêmes formats que la recherche manuelle par point
+  // (ex. "43,11945° N, 0,86581° O", copié tel quel depuis Google Maps/IGN, ou "lat, lon" classique).
   function handleIncomingLocation(){
     var params = new URLSearchParams(window.location.search);
+    var latlng = null;
+
     var lat = parseFloat(params.get('lat'));
     var lon = parseFloat(params.get('lon'));
-    if(isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    if(!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180){
+      latlng = L.latLng(lat, lon);
+    } else if(params.get('q')){
+      var p = parsePoint(params.get('q'));
+      if(p) latlng = L.latLng(p.lat, p.lon);
+    }
+    if(!latlng) return;
+
     activateOtherFilter(); // point reçu depuis une autre app : on inclut aussi les PEI "Autre", désactivés par défaut sinon
-    setSearchPoint(L.latLng(lat, lon));
+    setSearchPoint(latlng);
     if(window.history && window.history.replaceState){
       window.history.replaceState(null, '', window.location.pathname); // évite de relancer la même recherche à un rechargement
     }
