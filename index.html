@@ -423,7 +423,7 @@
   <aside id="sidebar">
     <header>
       <h1>Points d'eau <span>incendie</span></h1>
-      <p>Poteaux, bouches &amp; réserves — secteur Soumoulou / Pontacq</p>
+      <p>Poteaux, bouches &amp; réserves d'eau incendie</p>
     </header>
 
     <div class="section" id="commune-box">
@@ -431,7 +431,7 @@
       <div id="commune-controls">
         <p class="section-label">Rechercher une commune</p>
         <div id="commune-input-wrap">
-          <input id="commune-input" type="text" placeholder="Ex. Soumoulou, Nousty, Espoey…" autocomplete="off">
+          <input id="commune-input" type="text" placeholder="Nom de la commune…" autocomplete="off">
           <button id="commune-clear" title="Effacer">✕</button>
           <div id="commune-suggestions"></div>
         </div>
@@ -651,9 +651,9 @@
   var statsEl = document.getElementById('stats');
 
   // ---------- Chargement des données ----------
-  // Dans le fichier source, la propriété "commune" est parfois un nom (secteur Soumoulou/Pontacq,
-  // saisi à la main) et parfois un code INSEE brut (reste du 64 et communes limitrophes 65/40/32,
-  // issues d'un croisement géographique automatique). On résout ces codes en vrais noms via l'API.
+  // Dans le fichier source, la propriété "commune" est parfois un nom (saisi à la main)
+  // et parfois un code INSEE brut (issu d'un croisement géographique automatique).
+  // On résout ces codes en vrais noms via l'API.
   var codeToName = {};
   function resolveCommuneName(raw){
     if(raw && /^\d{5}$/.test(raw) && codeToName[raw]) return codeToName[raw];
@@ -732,17 +732,10 @@
     map.fitBounds(group.getBounds().pad(0.08));
   }
 
-  // Vue par défaut à l'ouverture : centrée sur Soumoulou, cadrée sur ~10 km autour.
-  var HOME_COMMUNE = 'Soumoulou';
+  // Vue par défaut à l'ouverture : cadrée sur l'ensemble des PEI chargés, pour rester
+  // générique quelle que soit la zone couverte par le jeu de données.
   function centerOnDefaultView(){
-    var home = communeIndex.filter(function(c){
-      return normalize(c.nom) === normalize(HOME_COMMUNE);
-    })[0];
-    if(home){
-      map.fitBounds(L.latLng(home.lat, home.lon).toBounds(20000)); // carré de 20 km de côté = ~10 km autour du centre
-    } else {
-      fitToData();
-    }
+    fitToData();
   }
 
   function toggleAllFilters(){
@@ -1086,22 +1079,15 @@
   });
 
   // ---------- Réception d'un point venant d'une autre app (ex. Raccourci iOS partagé depuis Plans) ----------
-  // Ouvrir l'appli avec ?lat=..&lon=.. déclenche directement la recherche du PEI le plus proche de ce point.
-  // Le paramètre ?q=.. est aussi accepté, avec les mêmes formats que la recherche manuelle par point
-  // (ex. "43,11945° N, 0,86581° O", copié tel quel depuis Google Maps/IGN, ou "lat, lon" classique).
+  // Ouvrir l'appli avec ?q=.. déclenche directement la recherche du PEI le plus proche de ce point,
+  // au format "43,11945°N,0,86581°O" (espaces optionnels) ou "lat, lon" classique — voir parsePoint().
   function handleIncomingLocation(){
     var params = new URLSearchParams(window.location.search);
-    var latlng = null;
+    if(!params.get('q')) return;
 
-    var lat = parseFloat(params.get('lat'));
-    var lon = parseFloat(params.get('lon'));
-    if(!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180){
-      latlng = L.latLng(lat, lon);
-    } else if(params.get('q')){
-      var p = parsePoint(params.get('q'));
-      if(p) latlng = L.latLng(p.lat, p.lon);
-    }
-    if(!latlng) return;
+    var p = parsePoint(params.get('q'));
+    if(!p) return;
+    var latlng = L.latLng(p.lat, p.lon);
 
     activateOtherFilter(); // point reçu depuis une autre app : on inclut aussi les PEI "Autre", désactivés par défaut sinon
     setSearchPoint(latlng);
