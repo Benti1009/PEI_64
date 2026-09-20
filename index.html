@@ -1054,6 +1054,7 @@
   });
 
   map.on('click', function(e){
+    if(Date.now() < doubleTapGuardUntil) return; // évite qu'un double-tap de zoom ne place un point
     if(!pickMode) return;
     pickMode = false;
     pointClickBtn.classList.remove('on');
@@ -1197,6 +1198,7 @@
   });
 
   map.on('click', function(e){
+    if(Date.now() < doubleTapGuardUntil) return; // évite qu'un double-tap de zoom n'ajoute un point de mesure
     if(!measureMode) return;
     addMeasurePoint(e.latlng);
   });
@@ -1263,6 +1265,116 @@
 
   // ---------- PWA : enregistrement (facultatif, pas de cache hors-ligne) ----------
   // Pas de service worker : hors-ligne non requis pour cette version.
+
+  // ========================================================================
+  // Geste tactile "double-tap" : zoom avant d'un niveau, centré sur le point
+  // tapé. Et "double-tap puis glisser sans relâcher le doigt vers le haut ou
+  // le bas" : zoome ou dézoome selon l'amplitude du glissé, appliqué en une
+  // seule fois au relâché du doigt (pas en continu pendant le geste, pour
+  // éviter les à-coups liés au repositionnement répété des tuiles). On
+  // ignore les contrôles Leaflet (zoom +/-, calques) pour ne pas déclencher
+  // le geste dessus, et le pincement à deux doigts n'est jamais concerné
+  // (on n'agit que sur un seul doigt à la fois). doubleTapGuardUntil est
+  // aussi utilisé par les gestionnaires 'click' de la carte plus haut, pour
+  // qu'un double-tap de zoom ne place pas un point ou un repère de mesure.
+  // ========================================================================
+  var doubleTapGuardUntil = 0;
+  (function () {
+    var mapEl = document.getElementById('map');
+    var mapPane = map.getPane('mapPane'); // panneau qui porte tuiles/marqueurs (pas les contrôles)
+    var TAP_MAX_DELAY = 300;   // ms max entre les deux taps
+    var TAP_MAX_DIST = 40;     // px de tolérance de position entre les deux taps
+    var DRAG_MOVE_THRESHOLD = 10; // px : en dessous, on considère qu'il n'y a pas eu de glissé
+    var PIXELS_PER_ZOOM_LEVEL = 100; // px de glissé vertical pour 1 niveau de zoom
+
+    var lastTapTime = 0;
+    var lastTapPoint = null;
+    var gestureActive = false;
+    var gestureStartY = 0;
+    var gestureStartZoom = 0;
+    var gestureCenter = null;
+    var gestureOriginPoint = null; // point tapé, en pixels dans le conteneur carte
+    var gestureBasePos = null;     // position (translate) du mapPane au repos, avant l'agrandissement visuel
+    var gestureMoved = false;
+    var lastScale = 1;
+
+    mapEl.addEventListener('touchstart', function (e) {
+      if (gestureActive) return;
+      if (e.touches.length !== 1) { lastTapTime = 0; return; }
+      if (e.target.closest('.leaflet-control')) { lastTapTime = 0; return; }
+
+      var touch = e.touches[0];
+      var now = Date.now();
+      var point = { x: touch.clientX, y: touch.clientY };
+
+      if (lastTapTime && (now - lastTapTime) < TAP_MAX_DELAY && lastTapPoint &&
+          Math.hypot(point.x - lastTapPoint.x, point.y - lastTapPoint.y) < TAP_MAX_DIST) {
+        // Double-tap détecté : on bloque toute prise en compte des clics
+        // (celui déjà programmé par le 1er tap, et celui à venir du 2e tap)
+        // pendant une courte fenêtre, plutôt que de compter sur l'annulation
+        // classique via un second "click" — pas fiable ici.
+        doubleTapGuardUntil = Date.now() + 400;
+
+        gestureActive = true;
+        gestureMoved = false;
+        gestureStartY = touch.clientY;
+        gestureStartZoom = map.getZoom();
+        var rect = mapEl.getBoundingClientRect();
+        gestureOriginPoint = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+        gestureCenter = map.containerPointToLatLng(gestureOriginPoint);
+        gestureBasePos = L.DomUtil.getPosition(mapPane);
+        lastScale = 1;
+        mapPane.style.transition = 'none';
+        map.dragging.disable();
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now;
+        lastTapPoint = point;
+      }
+    }, { passive: true });
+
+    mapEl.addEventListener('touchmove', function (e) {
+      if (!gestureActive || e.touches.length !== 1) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      var deltaY = gestureStartY - touch.clientY; // vers le haut = positif
+      if (Math.abs(deltaY) > DRAG_MOVE_THRESHOLD) gestureMoved = true;
+      // Pendant le glissé, on ne touche pas au vrai zoom Leaflet (donc pas
+      // de rechargement de tuiles) : on agrandit/rétrécit juste visuellement
+      // le panneau de la carte (transform CSS, pur affichage), centré sur
+      // le point tapé. Les tuiles ne sont recalculées qu'au relâché.
+      var zoomDelta = deltaY / PIXELS_PER_ZOOM_LEVEL;
+      var scale = Math.pow(2, zoomDelta);
+      lastScale = scale;
+      var p = gestureOriginPoint, b = gestureBasePos;
+      var newX = p.x - scale * (p.x - b.x);
+      var newY = p.y - scale * (p.y - b.y);
+      L.DomUtil.setTransform(mapPane, L.point(newX, newY), scale);
+    }, { passive: false });
+
+    function endGesture_() {
+      if (!gestureActive) return;
+      gestureActive = false;
+      map.dragging.enable();
+      // On enlève l'agrandissement visuel temporaire avant de déclencher le
+      // vrai zoom Leaflet, pour repartir d'un état propre — la bascule se
+      // fait dans le même tick JS (sans repaint entretemps) donc sans saut
+      // visible, et Leaflet prend le relais avec sa propre transition.
+      L.DomUtil.setTransform(mapPane, gestureBasePos, 1);
+      mapPane.style.transition = '';
+      if (gestureMoved) {
+        var zoomDelta = Math.log(lastScale) / Math.LN2;
+        var newZoom = gestureStartZoom + zoomDelta;
+        map.setZoomAround(gestureCenter, newZoom, { animate: true });
+      } else {
+        // Simple double-tap, sans glissé : zoom avant d'un niveau, comme un
+        // double-tap classique, avec une animation explicite et douce.
+        map.setZoomAround(gestureCenter, gestureStartZoom + 1, { animate: true });
+      }
+    }
+    mapEl.addEventListener('touchend', endGesture_);
+    mapEl.addEventListener('touchcancel', endGesture_);
+  })();
 
 })();
 </script>
