@@ -682,9 +682,21 @@
       buildMarkers();
       applyFilters();
       buildCommuneIndex(communesApi);
-      centerOnDefaultView();
-      handleIncomingLocation(); // si l'appli est ouverte avec ?lat=..&lon=.. (ex. via un Raccourci iOS), lance direct la recherche du PEI le plus proche
-      loadingEl.style.display = 'none';
+
+      // Un peu de latence entre les étapes suivantes : elles s'enchaînaient
+      // jusqu'ici dans le même tick JS juste après l'ajout des marqueurs au
+      // cluster, ce qui pouvait chevaucher le rendu des PEI et le centrage
+      // de la carte (PEI manquants à l'écran, carte pas centrée). On laisse
+      // le temps au navigateur de peindre les marqueurs avant de bouger la
+      // vue, puis on laisse ce premier centrage se stabiliser avant de
+      // lancer, le cas échéant, la recherche du point reçu par URL.
+      setTimeout(function(){
+        centerOnDefaultView();
+        setTimeout(function(){
+          handleIncomingLocation(); // si l'appli est ouverte avec ?lat=..&lon=.. (ex. via un Raccourci iOS), lance direct la recherche du PEI le plus proche
+          loadingEl.style.display = 'none';
+        }, 300);
+      }, 300);
     });
   }).catch(function(err){
     loadingText.textContent = "Erreur de chargement des données : " + err.message;
