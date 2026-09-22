@@ -84,7 +84,7 @@
       if (e.method === 0) return data;
       if (e.method !== 8) throw new Error('Compression .xlsx non prise en charge.');
       if (typeof DecompressionStream === 'undefined') {
-        throw new Error('Ce navigateur est trop ancien : utilise une version récente de Chrome, Edge ou Firefox.');
+        throw new Error('Ce navigateur est trop ancien : utilisez une version récente de Chrome, Edge ou Firefox.');
       }
       var stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
       return new Uint8Array(await new Response(stream).arrayBuffer());
@@ -253,7 +253,7 @@
     var head = rows[0].cells;
     if (norm(head[0]) !== 'valeur' || norm(head[1]) !== 'nombre') {
       push('error', 'Le tableau n\'a pas la forme attendue.',
-        'Les colonnes « Valeur » et « Nombre » sont attendues en 1re ligne. Refais l\'export depuis « Statistiques » (étape 3).');
+        'Les colonnes « Valeur » et « Nombre » sont attendues en 1re ligne. Refaites l\'export depuis « Statistiques » (étape 3).');
       return res;
     }
 
@@ -284,15 +284,15 @@
       push('error', plural(bad.length, 'ligne illisible', 'lignes illisibles') + ' (format attendu : « libellé, X, Y »).',
         bad.slice(0, 5).map(function (b) { return 'ligne ' + b.row + ' : « ' + shortLine(b.raw) + ' »'; }).join('\n') +
         (bad.length > 5 ? '\n… et ' + (bad.length - 5) + ' autres' : '') +
-        '\nVérifie les colonnes sélectionnées à l\'étape 3 : libellé, puis Point SIG X, puis Point SIG Y.');
+        '\nVérifiez les colonnes sélectionnées à l\'étape 3 : libellé, puis Point SIG X, puis Point SIG Y.');
     }
     if (swapped) {
       push('error', 'Point SIG X et Point SIG Y semblent inversés (' + plural(swapped, 'ligne', 'lignes') + ').',
-        'Refais l\'export en sélectionnant « Point SIG X » avant « Point SIG Y ».');
+        'Refaites l\'export en sélectionnant « Point SIG X » avant « Point SIG Y ».');
     }
     if (outOfL93) {
       push('error', plural(outOfL93, 'ligne a', 'lignes ont') + ' des coordonnées qui ne sont pas en Lambert 93.',
-        'Vérifie que ce sont bien « Point SIG X » et « Point SIG Y » qui ont été sélectionnés.');
+        'Vérifiez que ce sont bien « Point SIG X » et « Point SIG Y » qui ont été sélectionnés.');
     }
     if (codesOnly) {
       push('error', 'Le libellé est un code numérique et non un nom (' + plural(codesOnly, 'ligne', 'lignes') + ').',
@@ -388,7 +388,7 @@
     push('ok', plural(paired.length, 'PEI apparié', 'PEI appariés') + ' entre les deux fichiers (mêmes coordonnées X/Y).');
     if (sharedCoords) {
       push('warn', plural(sharedCoords, 'PEI partage', 'PEI partagent') + ' exactement les mêmes coordonnées qu\'un autre.',
-        'L\'appariement commune / type se fait alors dans l\'ordre des fichiers : vérifie ces points sur la carte.');
+        'L\'appariement commune / type se fait alors dans l\'ordre des fichiers : vérifiez ces points sur la carte.');
     }
 
     // -- 5. construction des points
@@ -414,7 +414,7 @@
     }
     if (outside) {
       push('warn', plural(outside, 'point est', 'points sont') + ' situés hors des Pyrénées-Atlantiques et de leurs environs.',
-        'Vérifie qu\'il ne s\'agit pas d\'une erreur de saisie dans Escort.');
+        'Vérifiez qu\'il ne s\'agit pas d\'une erreur de saisie dans Escort.');
     }
 
     // -- 6. récapitulatif
@@ -430,7 +430,7 @@
     // -- 7. comparaison avec les données actuellement publiées
     if (!current || !Array.isArray(current.features)) {
       push('error', 'Impossible de charger le fichier actuel data/hydrants.geojson.',
-        'Ouvre cette page depuis le site publié (GitHub Pages), pas depuis un fichier enregistré sur le PC : ' +
+        'Ouvrez cette page depuis le site publié (GitHub Pages), pas depuis un fichier enregistré sur le PC : ' +
         'il faut le fichier actuel pour conserver les autres points.');
       return out;
     }
@@ -460,7 +460,7 @@
         'Par rapport au fichier actuel (' + fmtN(oldSector.length) + ' PEI du secteur) : ' +
         added + ' ajouté' + (added > 1 ? 's' : '') + ', ' + removed + ' supprimé' + (removed > 1 ? 's' : '') + ', ' +
         modified + ' modifié' + (modified > 1 ? 's' : '') + ' (commune ou type), ' + unchanged + ' inchangé' + (unchanged > 1 ? 's' : '') + '.',
-        big ? 'L\'écart est important : vérifie que les exports n\'ont pas été filtrés ou tronqués avant de publier.' : null);
+        big ? 'L\'écart est important : vérifiez que les exports n\'ont pas été filtrés ou tronqués avant de publier.' : null);
     }
     push('ok', 'Les ' + fmtN(others) + ' autres points du fichier actuel (reste du 64) seront conservés tels quels.');
 

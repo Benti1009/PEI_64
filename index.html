@@ -457,7 +457,7 @@
       <button id="measure-box-close" class="panel-close" title="Fermer">✕</button>
       <div id="measure-controls">
         <p class="section-label">Mesurer une distance</p>
-        <p style="margin:0 0 10px;font-size:12px;color:var(--text-dim);">Clique plusieurs points sur la carte pour mesurer à vol d'oiseau (utile si le calcul par la route est indisponible).</p>
+        <p style="margin:0 0 10px;font-size:12px;color:var(--text-dim);">Cliquez plusieurs points sur la carte pour mesurer à vol d'oiseau (utile si le calcul par la route est indisponible).</p>
         <div class="point-btn-row">
           <button id="measure-start-btn" class="point-btn">📏 Démarrer la mesure</button>
           <button id="measure-clear-btn" class="point-btn ghost" style="display:none;">Effacer</button>
@@ -509,10 +509,10 @@
       <h3>Mise à jour des <span>PEI</span></h3>
 
       <p class="st-notice">💻 <b>Uniquement depuis un PC.</b> Cette opération est impossible depuis un mobile ou une tablette.</p>
-      <p class="st-lead">Les PEI du secteur viennent de deux exports Excel du site Escort (un avec les communes, un avec les types). Suis les étapes ci-dessous : les deux fichiers sont vérifiés, puis convertis en un seul fichier <code>hydrants.geojson</code> à déposer sur GitHub.</p>
+      <p class="st-lead">Les PEI du secteur viennent de deux exports Excel du site Escort (un avec les communes, un avec les types). Suivez les étapes ci-dessous : les deux fichiers sont vérifiés, puis convertis en un seul fichier <code>hydrants.geojson</code> à déposer sur GitHub.</p>
 
       <ol class="st-steps">
-        <li>Se connecter sur <a href="https://dei64.escort.fr" target="_blank" rel="noopener noreferrer">dei64.escort.fr</a>.</li>
+        <li>Se connecter sur <a href="https://deci64.escort.fr" target="_blank" rel="noopener noreferrer">deci64.escort.fr</a>.</li>
         <li>Dans le pavé <b>« PEI »</b>, cliquer sur <b>« Statistiques »</b>.</li>
         <li>
           <span class="st-tag">Export n°1</span><b>Les communes</b><br>
@@ -532,10 +532,10 @@
           Déposer les <b>2 fichiers Excel</b> obtenus ci-dessous (l'ordre n'a pas d'importance). Ils sont vérifiés avant de pouvoir générer le fichier.
           <div id="maj-tool">
             <div id="maj-drop">
-              <p>Glisse ici tes 2 fichiers Excel, ou colle-les avec <kbd>Ctrl</kbd> + <kbd>V</kbd></p>
+              <p>Glissez ici vos 2 fichiers Excel, ou collez-les avec <kbd>Ctrl</kbd> + <kbd>V</kbd></p>
               <button type="button" class="st-btn" id="maj-pick">Choisir les fichiers…</button>
               <input type="file" id="maj-input" accept=".xlsx" multiple hidden>
-              <p class="st-privacy">🔒 Les fichiers restent sur ton PC : ils sont lus dans ton navigateur, rien n'est envoyé.</p>
+              <p class="st-privacy">🔒 Les fichiers restent sur votre PC : ils sont lus dans votre navigateur, rien n'est envoyé.</p>
             </div>
             <ul id="maj-files"></ul>
             <div id="maj-report" aria-live="polite"></div>
@@ -1246,7 +1246,7 @@
 
   function renderMeasureResult(){
     if(measurePoints.length < 2){
-      measureResult.innerHTML = '<div class="ms-hint">Clique un 2ᵉ point sur la carte pour mesurer une distance.</div>';
+      measureResult.innerHTML = '<div class="ms-hint">Cliquez un 2ᵉ point sur la carte pour mesurer une distance.</div>';
       return;
     }
     var listHtml = '';

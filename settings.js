@@ -46,7 +46,7 @@
   // ---------- Ouverture / fermeture ----------
   openBtn.addEventListener('click', function () {
     if (typeof dlg.showModal !== 'function') {
-      alert('Ce navigateur est trop ancien pour cette fonction : utilise une version récente de Chrome ou Edge.');
+      alert('Ce navigateur est trop ancien pour cette fonction : utilisez une version récente de Chrome ou Edge.');
       return;
     }
     dlg.showModal();
@@ -118,7 +118,7 @@
       try {
         if (!/\.xlsx$/i.test(f.name)) {
           throw new Error(/\.xls$/i.test(f.name)
-            ? 'Format .xls non pris en charge : refais l\'export vers Excel (.xlsx).'
+            ? 'Format .xls non pris en charge : refaites l\'export vers Excel (.xlsx).'
             : 'Ce fichier n\'est pas un classeur Excel .xlsx.');
         }
         entry.rows = await PEIUpdate.readXlsxRows(await f.arrayBuffer());
@@ -165,7 +165,7 @@
     if (readErrors.length) {
       readErrors.forEach(function (f) { checks.push({ level: 'error', title: f.name + ' — ' + f.error }); });
     } else if (files.length === 1) {
-      reportEl.appendChild(el('p', 'r-wait', '1 fichier chargé. Il manque le 2e export : dépose-le à son tour.'));
+      reportEl.appendChild(el('p', 'r-wait', '1 fichier chargé. Il manque le 2e export : déposez-le à son tour.'));
       return;
     } else {
       var current = await loadCurrent();
@@ -228,7 +228,7 @@
     resultEl.appendChild(document.createTextNode(
       built.total.toLocaleString('fr-FR') + ' points au total (' + built.sector.toLocaleString('fr-FR') +
       ' du secteur mis à jour + ' + built.others.toLocaleString('fr-FR') + ' autres conservés). ' +
-      'Dernière étape : dépose-le dans le dossier data de GitHub (étape 6).'));
+      'Dernière étape : déposez-le dans le dossier data de GitHub (étape 6).'));
   });
 
   render();
